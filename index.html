@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,100..900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script>
-    tailwind.config={theme:{extend:{colors:{bg:'#08080C',surface:'#111118',card:'#1A1A24',elevated:'#22222E',accent:'#00E68A','accent-dim':'rgba(0,230,138,0.15)',danger:'#FF4070','danger-dim':'rgba(255,64,112,0.15)',warn:'#FFB020',muted:'#6E6E82',txt:'#F0F0F5',bdr:'#28283A',upi:'#5F259F',gpay:'#4285F4',phonepe:'#5F259F',paytm:'#00BAF2',bhim:'#003399'},fontFamily:{sans:['"DM Sans"','sans-serif'],mono:['"JetBrains Mono"','monospace']}}}}
+    tailwind.config={theme:{extend:{colors:{bg:'#08080C',surface:'#111118',card:'#1A1A24',elevated:'#22222E',accent:'#00E68A','accent-dim':'rgba(0,230,138,0.15)',danger:'#FF4070','danger-dim':'rgba(255,64,112,0.15)',warn:'#FFB020',muted:'#6E6E82',txt:'#F0F0F5',bdr:'#28283A',upi:'#5F259F'},fontFamily:{sans:['"DM Sans"','sans-serif'],mono:['"JetBrains Mono"','monospace']}}}}
     </script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',sans-serif;background:#08080C;color:#F0F0F5;min-height:100dvh;overflow-x:hidden}
@@ -21,17 +21,23 @@
         @keyframes check-pop{0%{transform:scale(0)}60%{transform:scale(1.3)}100%{transform:scale(1)}}
         @keyframes confetti-fall{0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}
         @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+        @keyframes float-slow{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-12px) rotate(5deg)}}
+        @keyframes float-alt{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-6px) rotate(-3deg)}}
         @keyframes ripple{0%{transform:scale(0.8);opacity:0.6}100%{transform:scale(2.5);opacity:0}}
         @keyframes chime-ring{0%{transform:rotate(0deg)}15%{transform:rotate(15deg)}30%{transform:rotate(-12deg)}45%{transform:rotate(8deg)}60%{transform:rotate(-5deg)}75%{transform:rotate(2deg)}100%{transform:rotate(0deg)}}
         @keyframes overlay-breathe{0%,100%{background:rgba(0,230,138,0.03)}50%{background:rgba(0,230,138,0.08)}}
-        .anim-fade-in{animation:fade-in .3s ease-out}.anim-scale-in{animation:scale-in .3s ease-out}.anim-check-pop{animation:check-pop .4s ease-out}.anim-gentle-pulse{animation:gentle-pulse 2.5s ease-in-out infinite}.anim-float{animation:float 3s ease-in-out infinite}
+        @keyframes orbit{0%{transform:rotate(0deg) translateX(60px) rotate(0deg)}100%{transform:rotate(360deg) translateX(60px) rotate(-360deg)}}
+        @keyframes orbit2{0%{transform:rotate(120deg) translateX(45px) rotate(-120deg)}100%{transform:rotate(480deg) translateX(45px) rotate(-480deg)}}
+        @keyframes orbit3{0%{transform:rotate(240deg) translateX(50px) rotate(-240deg)}100%{transform:rotate(600deg) translateX(50px) rotate(-600deg)}}
+        @keyframes glow-ring{0%,100%{opacity:0.3;transform:scale(1)}50%{opacity:0.7;transform:scale(1.05)}}
+        .anim-fade-in{animation:fade-in .3s ease-out}.anim-scale-in{animation:scale-in .3s ease-out}.anim-check-pop{animation:check-pop .4s ease-out}.anim-gentle-pulse{animation:gentle-pulse 2.5s ease-in-out infinite}
         .screen{display:none;min-height:100dvh;flex-direction:column}.screen.active{display:flex}
         .bg-mesh{background-image:radial-gradient(ellipse at 15% 10%,rgba(0,230,138,0.06) 0%,transparent 50%),radial-gradient(ellipse at 85% 90%,rgba(255,64,112,0.04) 0%,transparent 50%),radial-gradient(ellipse at 50% 50%,rgba(255,176,32,0.03) 0%,transparent 60%)}
         .amount-input{font-family:'JetBrains Mono',monospace;font-size:44px;font-weight:700;color:#00E68A;background:transparent;border:none;text-align:center;width:100%;caret-color:#00E68A;line-height:1.1}
         .amount-input::placeholder{color:#28283A}
         .chip{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:24px;font-size:14px;font-weight:600;transition:all .2s ease;cursor:pointer;user-select:none}
         .overlay-bg{position:fixed;inset:0;background:rgba(8,8,12,0.7);z-index:99;animation:fade-in .2s ease-out;backdrop-filter:blur(4px)}
-        .bottom-sheet{position:fixed;bottom:0;left:0;right:0;z-index:100;animation:slide-up .35s ease-out}
+        .bottom-sheet{position:fixed;bottom:0;left:0;right:0;z-index:100;animation:slide-up .35s ease-out;max-height:85dvh;overflow-y:auto}
         .reminder-overlay{position:fixed;inset:0;z-index:200;animation:fade-in .2s ease-out}
         .toast-msg{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;animation:slide-up .3s ease-out}
         @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
@@ -40,50 +46,51 @@
 <body class="bg-bg">
 
 <!-- HOME -->
-<div id="screen-home" class="screen active bg-mesh">
-    <div class="flex-1 flex flex-col items-center justify-center px-6 py-8">
-        <div class="mb-2 anim-float"><div class="w-20 h-20 rounded-3xl bg-accent-dim border border-accent/30 flex items-center justify-center"><i class="fa-solid fa-divide text-accent text-3xl"></i></div></div>
-        <h1 class="text-3xl font-extrabold tracking-tight mb-1">SplitNow</h1>
-        <p class="text-muted text-sm mb-10">Split expenses in one tap</p>
-        <div id="home-splits" class="w-full max-w-sm space-y-3 mb-8"></div>
-        <button onclick="showScreen('create');resetCreateForm()" class="w-full max-w-sm py-4 rounded-2xl bg-accent text-bg font-bold text-lg tracking-wide anim-gentle-pulse active:scale-95 transition-transform"><i class="fa-solid fa-plus mr-2"></i> New Split</button>
-        <button onclick="loadDemo()" class="mt-4 text-muted text-sm underline underline-offset-4 hover:text-accent transition-colors">Try a demo split</button>
+<div id="screen-home" class="screen active">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+        <div class="absolute w-72 h-72 rounded-full bg-accent/[0.04] blur-3xl -top-20 -left-20" style="animation:float-slow 8s ease-in-out infinite"></div>
+        <div class="absolute w-64 h-64 rounded-full bg-warn/[0.03] blur-3xl -bottom-10 -right-10" style="animation:float-alt 7s ease-in-out infinite"></div>
+        <div class="absolute w-48 h-48 rounded-full bg-danger/[0.03] blur-3xl top-1/3 right-1/4" style="animation:float 9s ease-in-out infinite"></div>
+    </div>
+    <div class="flex-1 px-5 pb-8 overflow-y-auto relative z-10">
+        <!-- Hero -->
+        <div class="pt-8 pb-6 text-center">
+            <div class="relative w-28 h-28 mx-auto mb-5">
+                <div class="absolute inset-0" style="animation:orbit 12s linear infinite"><div class="w-3 h-3 rounded-full bg-accent/40"></div></div>
+                <div class="absolute inset-0" style="animation:orbit2 10s linear infinite"><div class="w-2.5 h-2.5 rounded-full bg-warn/40"></div></div>
+                <div class="absolute inset-0" style="animation:orbit3 14s linear infinite"><div class="w-2 h-2 rounded-full bg-danger/40"></div></div>
+                <div class="absolute inset-2 rounded-3xl border-2 border-accent/20" style="animation:glow-ring 3s ease-in-out infinite"></div>
+                <div class="absolute inset-3 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/30 flex items-center justify-center backdrop-blur-sm"><i class="fa-solid fa-divide text-accent text-4xl"></i></div>
+            </div>
+            <h1 class="text-4xl font-black tracking-tight mb-2 bg-gradient-to-r from-accent via-emerald-300 to-accent bg-clip-text text-transparent">SplitNow</h1>
+            <p class="text-muted text-sm mb-1">Court booking? Chai after game? Sutta?</p>
+            <p class="text-muted/60 text-xs">Split it all in one tap. No login. No app download.</p>
+        </div>
+
+        <!-- Custom Split Button -->
+        <button onclick="showScreen('create');resetCreateForm()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-accent to-emerald-400 text-bg font-bold text-base tracking-wide anim-gentle-pulse active:scale-95 transition-transform mb-6 shadow-lg shadow-accent/20">
+            <i class="fa-solid fa-plus mr-2"></i> Custom Split
+        </button>
+
+        <!-- Your Splits -->
+        <div id="home-splits" class="space-y-4"></div>
+
+        <button onclick="loadDemo()" class="mt-6 text-muted/60 text-xs underline underline-offset-4 hover:text-accent transition-colors block text-center w-full">Or try a demo with sample data</button>
+        <div class="h-8"></div>
     </div>
 </div>
 
 <!-- CREATE -->
 <div id="screen-create" class="screen bg-mesh">
     <div class="px-5 pt-6 pb-4 flex items-center gap-3">
-        <button onclick="showScreen('home')" class="w-10 h-10 rounded-xl bg-card border border-bdr flex items-center justify-center hover:bg-elevated transition-colors"><i class="fa-solid fa-arrow-left text-muted text-sm"></i></button>
+        <button onclick="showScreen('home');renderHome()" class="w-10 h-10 rounded-xl bg-card border border-bdr flex items-center justify-center hover:bg-elevated transition-colors"><i class="fa-solid fa-arrow-left text-muted text-sm"></i></button>
         <h2 class="text-xl font-bold">New Split</h2>
     </div>
-    <div class="flex-1 px-5 pb-8 overflow-y-auto space-y-6">
-        <div class="text-center">
-            <label class="text-muted text-xs font-semibold uppercase tracking-widest mb-2 block">Group Name</label>
-            <input id="cr-desc" type="text" placeholder="Goa Trip, Flat Rent..." maxlength="30" class="w-full bg-card border border-bdr rounded-xl px-4 py-3 text-txt placeholder-muted/50 focus:border-accent transition-colors text-base text-center">
-        </div>
-        <div>
-            <label class="text-muted text-xs font-semibold uppercase tracking-widest mb-2 block">Who's involved?</label>
-            <div class="flex gap-2 mb-3">
-                <input id="cr-name-input" type="text" placeholder="Name" maxlength="15" class="flex-1 bg-card border border-bdr rounded-xl px-4 py-2.5 text-txt placeholder-muted/50 focus:border-accent transition-colors text-sm" onkeydown="if(event.key==='Enter'){event.preventDefault();addParticipant()}">
-                <button onclick="addParticipant()" class="px-4 rounded-xl bg-accent/20 text-accent font-bold text-sm border border-accent/30 hover:bg-accent/30 transition-colors active:scale-95"><i class="fa-solid fa-plus"></i></button>
-            </div>
-            <div id="cr-chips" class="flex flex-wrap gap-2"></div>
-        </div>
-        <div class="bg-card border border-bdr rounded-2xl p-4">
-            <label class="text-muted text-xs font-semibold uppercase tracking-widest mb-2 block">First Expense</label>
-            <div class="flex items-center justify-center gap-2 mb-3">
-                <select id="cr-currency" class="bg-elevated border border-bdr rounded-lg px-2 py-1.5 text-accent font-mono font-bold text-lg focus:border-accent cursor-pointer"><option value="₹" selected>₹</option><option value="$">$</option><option value="€">€</option><option value="£">£</option></select>
-                <input id="cr-amount" type="text" inputmode="decimal" placeholder="0" class="amount-input" maxlength="10" oninput="updateCreateSummary()">
-            </div>
-            <input id="cr-expdesc" type="text" placeholder="Hotel, Dinner..." maxlength="20" class="w-full bg-elevated border border-bdr rounded-lg px-3 py-2 text-txt placeholder-muted/50 focus:border-accent transition-colors text-sm text-center mb-3">
-            <label class="text-muted text-xs font-semibold uppercase tracking-widest mb-2 block">Paid by?</label>
-            <div id="cr-payer-chips" class="flex flex-wrap gap-2"></div>
-        </div>
-        <div>
-            <label class="text-muted text-xs font-semibold uppercase tracking-widest mb-2 block">Your UPI ID <span class="text-accent/50 normal-case">(optional)</span></label>
-            <input id="cr-upi" type="text" placeholder="name@paytm" class="w-full bg-card border border-bdr rounded-xl px-4 py-3 text-txt placeholder-muted/50 focus:border-accent transition-colors text-sm font-mono">
-        </div>
+    <div class="flex-1 px-5 pb-8 overflow-y-auto space-y-5">
+        <div class="text-center"><label class="text-muted text-xs font-semibold uppercase tracking-widest mb-2 block">Group Name</label><input id="cr-desc" type="text" placeholder="Saturday Badminton Gang..." maxlength="30" class="w-full bg-card border border-bdr rounded-xl px-4 py-3 text-txt placeholder-muted/50 focus:border-accent transition-colors text-base text-center"></div>
+        <div><label class="text-muted text-xs font-semibold uppercase tracking-widest mb-2 block">Who's involved?</label><div class="flex gap-2 mb-3"><input id="cr-name-input" type="text" placeholder="Name" maxlength="15" class="flex-1 bg-card border border-bdr rounded-xl px-4 py-2.5 text-txt placeholder-muted/50 focus:border-accent transition-colors text-sm" onkeydown="if(event.key==='Enter'){event.preventDefault();addParticipant()}"><button onclick="addParticipant()" class="px-4 rounded-xl bg-accent/20 text-accent font-bold text-sm border border-accent/30 hover:bg-accent/30 transition-colors active:scale-95"><i class="fa-solid fa-plus"></i></button></div><div id="cr-chips" class="flex flex-wrap gap-2"></div></div>
+        <div><label class="text-muted text-xs font-semibold uppercase tracking-widest mb-2 block">Expenses</label><div id="cr-expenses-list" class="space-y-2 mb-2"></div><button onclick="addCreateExpense()" class="w-full py-2.5 rounded-xl bg-accent/10 border border-dashed border-accent/30 text-accent font-semibold text-sm hover:bg-accent/15 transition-colors active:scale-95"><i class="fa-solid fa-plus mr-2"></i>Add Expense</button></div>
+        <div><label class="text-muted text-xs font-semibold uppercase tracking-widest mb-2 block">Your UPI ID <span class="text-accent/50 normal-case">(optional)</span></label><input id="cr-upi" type="text" placeholder="name@paytm" class="w-full bg-card border border-bdr rounded-xl px-4 py-3 text-txt placeholder-muted/50 focus:border-accent transition-colors text-sm font-mono"><p class="text-muted/40 text-[10px] mt-1">Others pay you directly via GPay, PhonePe, Paytm, BHIM</p></div>
         <button onclick="createSplit()" id="cr-submit" class="w-full py-4 rounded-2xl bg-accent text-bg font-bold text-lg tracking-wide disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 transition-all">Create & Share</button>
     </div>
 </div>
@@ -94,318 +101,128 @@
         <button onclick="showScreen('home');renderHome()" class="w-10 h-10 rounded-xl bg-card border border-bdr flex items-center justify-center hover:bg-elevated transition-colors"><i class="fa-solid fa-arrow-left text-muted text-sm"></i></button>
         <div class="flex items-center gap-2">
             <div id="vw-identity-badge" class="hidden px-3 py-1.5 rounded-full bg-accent-dim border border-accent/30 text-accent text-xs font-semibold cursor-pointer hover:bg-accent/20 transition-colors" onclick="showIdentityPicker()"><i class="fa-solid fa-user mr-1"></i><span id="vw-identity-name"></span></div>
-            <button onclick="toggleReminderSetting()" id="vw-remind-btn" class="w-10 h-10 rounded-xl bg-card border border-bdr flex items-center justify-center hover:bg-elevated transition-colors"><i class="fa-solid fa-bell text-accent text-sm"></i></button>
             <button onclick="openShareSheet()" class="w-10 h-10 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center hover:bg-accent/30 transition-colors"><i class="fa-solid fa-share-nodes text-accent text-sm"></i></button>
         </div>
     </div>
-    <div class="flex-1 px-5 pb-8 overflow-y-auto" id="vw-scroll">
-        <!-- filled by renderView() -->
-    </div>
+    <div class="flex-1 px-5 pb-8 overflow-y-auto" id="vw-scroll"></div>
 </div>
 
-<!-- IDENTITY PICKER -->
+<!-- IDENTITY -->
 <div id="identity-overlay" class="overlay-bg hidden"></div>
-<div id="identity-sheet" class="bottom-sheet hidden">
-    <div class="bg-surface border-t border-bdr rounded-t-3xl px-6 pt-5 pb-8">
-        <div class="w-10 h-1 bg-bdr rounded-full mx-auto mb-5"></div>
-        <div class="text-center mb-5"><div class="w-14 h-14 rounded-2xl bg-accent-dim border border-accent/30 flex items-center justify-center mx-auto mb-3"><i class="fa-solid fa-user text-accent text-xl"></i></div><h3 class="text-lg font-bold mb-1">Who are you?</h3><p class="text-muted text-sm">Tap your name so reminders only notify you</p></div>
-        <div id="identity-choices" class="space-y-2 mb-4"></div>
-        <button onclick="closeIdentityPicker(true)" class="w-full py-3 rounded-xl bg-card border border-bdr text-muted font-semibold text-sm hover:bg-elevated transition-colors">Skip for now</button>
-    </div>
-</div>
+<div id="identity-sheet" class="bottom-sheet hidden"><div class="bg-surface border-t border-bdr rounded-t-3xl px-6 pt-5 pb-8"><div class="w-10 h-1 bg-bdr rounded-full mx-auto mb-5"></div><div class="text-center mb-5"><h3 class="text-lg font-bold mb-1">Who are you?</h3><p class="text-muted text-sm">Tap your name for personalized reminders</p></div><div id="identity-choices" class="space-y-2 mb-4"></div><button onclick="closeIdentityPicker(true)" class="w-full py-3 rounded-xl bg-card border border-bdr text-muted font-semibold text-sm hover:bg-elevated transition-colors">Skip</button></div></div>
 
-<!-- ADD EXPENSE SHEET -->
+<!-- ADD EXPENSE -->
 <div id="addexp-overlay" class="overlay-bg hidden" onclick="closeAddExpense()"></div>
-<div id="addexp-sheet" class="bottom-sheet hidden">
-    <div class="bg-surface border-t border-bdr rounded-t-3xl px-5 pt-4 pb-8">
-        <div class="w-10 h-1 bg-bdr rounded-full mx-auto mb-4"></div>
-        <h3 class="text-lg font-bold mb-4">Add Expense</h3>
-        <div class="space-y-3">
-            <input id="ae-desc" type="text" placeholder="What? (Dinner, Cab...)" maxlength="20" class="w-full bg-card border border-bdr rounded-xl px-4 py-3 text-txt placeholder-muted/50 focus:border-accent transition-colors text-sm">
-            <input id="ae-amount" type="text" inputmode="decimal" placeholder="Amount" class="w-full bg-card border border-bdr rounded-xl px-4 py-3 text-accent font-mono font-bold text-xl placeholder-muted/50 focus:border-accent transition-colors text-center">
-            <div>
-                <label class="text-muted text-xs font-semibold uppercase tracking-widest mb-2 block">Paid by?</label>
-                <div id="ae-payer-chips" class="flex flex-wrap gap-2"></div>
-            </div>
-            <button onclick="submitExpense()" class="w-full py-3.5 rounded-xl bg-accent text-bg font-bold text-sm active:scale-95 transition-transform">Add</button>
-            <button onclick="closeAddExpense()" class="w-full py-3 rounded-xl bg-card border border-bdr text-muted font-semibold text-sm hover:bg-elevated transition-colors">Cancel</button>
-        </div>
-    </div>
-</div>
+<div id="addexp-sheet" class="bottom-sheet hidden"><div class="bg-surface border-t border-bdr rounded-t-3xl px-5 pt-4 pb-8"><div class="w-10 h-1 bg-bdr rounded-full mx-auto mb-4"></div><h3 class="text-lg font-bold mb-1">Add Expense</h3><p id="ae-added-msg" class="hidden text-accent text-xs mb-3"><i class="fa-solid fa-circle-check mr-1"></i><span id="ae-added-text"></span></p><div class="space-y-3"><input id="ae-desc" type="text" placeholder="What? (Chai, Court, Snacks...)" maxlength="20" class="w-full bg-card border border-bdr rounded-xl px-4 py-3 text-txt placeholder-muted/50 focus:border-accent transition-colors text-sm"><input id="ae-amount" type="text" inputmode="decimal" placeholder="Amount" class="w-full bg-card border border-bdr rounded-xl px-4 py-3 text-accent font-mono font-bold text-xl placeholder-muted/50 focus:border-accent transition-colors text-center"><div><label class="text-muted text-xs font-semibold uppercase tracking-widest mb-2 block">Paid by?</label><div id="ae-payer-chips" class="flex flex-wrap gap-2"></div></div><button onclick="submitExpense(true)" class="w-full py-3.5 rounded-xl bg-accent text-bg font-bold text-sm active:scale-95 transition-transform"><i class="fa-solid fa-plus mr-2"></i>Add Expense</button><button onclick="submitExpense(false)" class="w-full py-3 rounded-xl bg-accent/10 border border-accent/20 text-accent font-semibold text-sm hover:bg-accent/15 transition-colors active:scale-95"><i class="fa-solid fa-plus mr-1"></i>Add Another</button><button onclick="closeAddExpense()" class="w-full py-3 rounded-xl bg-card border border-bdr text-muted font-semibold text-sm hover:bg-elevated transition-colors">Done</button></div></div></div>
 
-<!-- SHARE SHEET -->
+<!-- SHARE -->
 <div id="share-overlay" class="overlay-bg hidden" onclick="closeShareSheet()"></div>
-<div id="share-sheet" class="bottom-sheet hidden">
-    <div class="bg-surface border-t border-bdr rounded-t-3xl px-6 pt-4 pb-8">
-        <div class="w-10 h-1 bg-bdr rounded-full mx-auto mb-5"></div>
-        <h3 class="text-lg font-bold mb-4">Share this split</h3>
-        <div class="grid grid-cols-4 gap-3 mb-5">
-            <button onclick="shareWhatsApp()" class="flex flex-col items-center gap-2 py-3 rounded-xl hover:bg-card transition-colors"><div class="w-12 h-12 rounded-xl bg-[#25D366]/20 flex items-center justify-center"><i class="fa-brands fa-whatsapp text-[#25D366] text-xl"></i></div><span class="text-xs text-muted">WhatsApp</span></button>
-            <button onclick="shareSMS()" class="flex flex-col items-center gap-2 py-3 rounded-xl hover:bg-card transition-colors"><div class="w-12 h-12 rounded-xl bg-warn/20 flex items-center justify-center"><i class="fa-solid fa-comment-sms text-warn text-xl"></i></div><span class="text-xs text-muted">SMS</span></button>
-            <button onclick="shareNative()" class="flex flex-col items-center gap-2 py-3 rounded-xl hover:bg-card transition-colors"><div class="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center"><i class="fa-solid fa-share-nodes text-accent text-xl"></i></div><span class="text-xs text-muted">More</span></button>
-            <button onclick="copyLink()" class="flex flex-col items-center gap-2 py-3 rounded-xl hover:bg-card transition-colors"><div class="w-12 h-12 rounded-xl bg-muted/20 flex items-center justify-center"><i class="fa-solid fa-link text-muted text-xl"></i></div><span class="text-xs text-muted">Copy</span></button>
-        </div>
-        <div class="bg-card border border-bdr rounded-xl p-3 flex items-center gap-2"><i class="fa-solid fa-link text-muted text-xs"></i><input id="share-link-input" type="text" readonly class="flex-1 bg-transparent text-muted text-xs font-mono truncate" onclick="this.select()"></div>
-    </div>
-</div>
+<div id="share-sheet" class="bottom-sheet hidden"><div class="bg-surface border-t border-bdr rounded-t-3xl px-6 pt-4 pb-8"><div class="w-10 h-1 bg-bdr rounded-full mx-auto mb-5"></div><h3 class="text-lg font-bold mb-4">Share this split</h3><div class="grid grid-cols-4 gap-3 mb-5"><button onclick="shareWhatsApp()" class="flex flex-col items-center gap-2 py-3 rounded-xl hover:bg-card transition-colors"><div class="w-12 h-12 rounded-xl bg-[#25D366]/20 flex items-center justify-center"><i class="fa-brands fa-whatsapp text-[#25D366] text-xl"></i></div><span class="text-xs text-muted">WhatsApp</span></button><button onclick="shareSMS()" class="flex flex-col items-center gap-2 py-3 rounded-xl hover:bg-card transition-colors"><div class="w-12 h-12 rounded-xl bg-warn/20 flex items-center justify-center"><i class="fa-solid fa-comment-sms text-warn text-xl"></i></div><span class="text-xs text-muted">SMS</span></button><button onclick="shareNative()" class="flex flex-col items-center gap-2 py-3 rounded-xl hover:bg-card transition-colors"><div class="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center"><i class="fa-solid fa-share-nodes text-accent text-xl"></i></div><span class="text-xs text-muted">More</span></button><button onclick="copyLink()" class="flex flex-col items-center gap-2 py-3 rounded-xl hover:bg-card transition-colors"><div class="w-12 h-12 rounded-xl bg-muted/20 flex items-center justify-center"><i class="fa-solid fa-link text-muted text-xl"></i></div><span class="text-xs text-muted">Copy</span></button></div><div class="bg-card border border-bdr rounded-xl p-3 flex items-center gap-2"><i class="fa-solid fa-link text-muted text-xs"></i><input id="share-link-input" type="text" readonly class="flex-1 bg-transparent text-muted text-xs font-mono truncate" onclick="this.select()"></div></div></div>
 
-<!-- REMINDER OVERLAY -->
-<div id="reminder-overlay" class="reminder-overlay hidden">
-    <div class="h-full flex flex-col items-center justify-center px-6" style="animation:overlay-breathe 3s ease-in-out infinite">
-        <div class="relative mb-6"><div class="absolute inset-0 w-24 h-24 rounded-full border-2 border-accent/30" style="animation:ripple 2s ease-out infinite"></div><div class="absolute inset-0 w-24 h-24 rounded-full border-2 border-accent/20" style="animation:ripple 2s ease-out infinite 0.5s"></div><div class="w-24 h-24 rounded-full bg-accent-dim border-2 border-accent/40 flex items-center justify-center" style="animation:chime-ring 1s ease-out"><i class="fa-solid fa-bell text-accent text-4xl"></i></div></div>
-        <h2 class="text-accent text-2xl font-extrabold mb-2">Friendly Reminder</h2>
-        <p id="reminder-msg" class="text-accent/60 text-sm text-center mb-8 max-w-xs"></p>
-        <button onclick="dismissReminder()" class="px-8 py-3 rounded-xl bg-accent text-bg font-bold active:scale-95 transition-transform">Got it</button>
-    </div>
-</div>
+<!-- REMINDER -->
+<div id="reminder-overlay" class="reminder-overlay hidden"><div class="h-full flex flex-col items-center justify-center px-6" style="animation:overlay-breathe 3s ease-in-out infinite"><div class="relative mb-6"><div class="absolute inset-0 w-24 h-24 rounded-full border-2 border-accent/30" style="animation:ripple 2s ease-out infinite"></div><div class="w-24 h-24 rounded-full bg-accent-dim border-2 border-accent/40 flex items-center justify-center" style="animation:chime-ring 1s ease-out"><i class="fa-solid fa-bell text-accent text-4xl"></i></div></div><h2 class="text-accent text-2xl font-extrabold mb-2">Friendly Reminder</h2><p id="reminder-msg" class="text-accent/60 text-sm text-center mb-8 max-w-xs"></p><button onclick="dismissReminder()" class="px-8 py-3 rounded-xl bg-accent text-bg font-bold active:scale-95 transition-transform">Got it</button></div></div>
 
 <div id="toast-container"></div>
 
 <script>
 const STORAGE_KEY='splitnow_data',IDENTITY_KEY='splitnow_identity_',THIRTY_DAYS=30*24*60*60*1000;
-let currentSplit=null,myIdentity='',createParticipants=[],createPayer='',reminderEnabled=true,reminderTimeout=null;
+let currentSplit=null,myIdentity='',createParticipants=[],createPayer='',createExpenses=[],reminderEnabled=true,reminderTimeout=null;
 const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 let bc=null;try{bc=new BroadcastChannel('splitnow_sync');bc.onmessage=onSyncMessage;}catch(e){}
 
-/* ===== UTILITIES ===== */
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
-function encodeSplit(d){try{const c={i:d.id,n:d.name,c:d.currency,t:d.participants,e:d.expenses,sk:d.settledKeys,um:d.upiMap||{},x:d.expiry};return btoa(unescape(encodeURIComponent(JSON.stringify(c)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}catch(e){return'';}}
-function decodeSplit(enc){try{let b=enc.replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';const c=JSON.parse(decodeURIComponent(escape(atob(b))));return{id:c.i,name:c.n,currency:c.c,participants:c.t,expenses:c.e||[],settledKeys:c.sk||[],upiMap:c.um||{},expiry:c.x};}catch(e){return null;}}
+function encodeSplit(d){try{const c={i:d.id,n:d.name,c:d.currency,t:d.participants,e:d.expenses,sk:d.settledKeys,um:d.upiMap||{},x:d.expiry,cr:d.created||Date.now(),sv:d.saved||false};return btoa(unescape(encodeURIComponent(JSON.stringify(c)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}catch(e){return'';}}
+function decodeSplit(enc){try{let b=enc.replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';const c=JSON.parse(decodeURIComponent(escape(atob(b))));return{id:c.i,name:c.n,currency:c.c,participants:c.t,expenses:c.e||[],settledKeys:c.sk||[],upiMap:c.um||{},expiry:c.x,created:c.cr||Date.now(),saved:c.sv||false};}catch(e){return null;}}
 function getShareURL(d){return window.location.origin+window.location.pathname+'#s='+encodeSplit(d);}
-function fa(c,a){const n=Number(a);if(isNaN(n))return c+'0';if(n>=10000000)return c+(n/1e7).toFixed(2)+'Cr';if(n>=100000)return c+(n/1e5).toFixed(2)+'L';return c+n.toLocaleString('en-IN',{maximumFractionDigits:2});}
+function fa(c,a){const n=Number(a);if(isNaN(n))return c+'0';if(n>=1e7)return c+(n/1e7).toFixed(2)+'Cr';if(n>=1e5)return c+(n/1e5).toFixed(2)+'L';return c+n.toLocaleString('en-IN',{maximumFractionDigits:2});}
 function daysLeft(e){return Math.max(0,Math.ceil((e-Date.now())/864e5));}
 function isExpired(s){return Date.now()>s.expiry;}
 
-/* ===== BALANCE CALCULATION ===== */
-function calcBalances(split){
-    const b={};split.participants.forEach(p=>b[p]=0);
-    const n=split.participants.length;if(!n)return{balances:b,transfers:[]};
-    split.expenses.forEach(ex=>{b[ex.p]=(b[ex.p]||0)+ex.a;});
-    const total=split.expenses.reduce((s,e)=>s+e.a,0),share=total/n;
-    split.participants.forEach(p=>b[p]-=share);
-    // Calculate transfers (greedy)
-    const debtors=[],creditors=[];
-    split.participants.forEach(p=>{const v=Math.round(b[p]*100)/100;if(v<-0.01)debtors.push({n:p,a:-v});else if(v>0.01)creditors.push({n:p,a:v});});
-    debtors.sort((a,b)=>b.a-a.a);creditors.sort((a,b)=>b.a-a.a);
-    const transfers=[];
-    let i=0,j=0;
-    while(i<debtors.length&&j<creditors.length){
-        const d=debtors[i],c=creditors[j],amt=Math.min(d.a,c.a);
-        if(amt>0.01)transfers.push({from:d.n,to:c.n,amount:Math.round(amt*100)/100});
-        d.a-=amt;c.a-=amt;if(d.a<0.01)i++;if(c.a<0.01)j++;
-    }
-    return{balances:b,transfers};
-}
-function allSettled(split){const{transfers}=calcBalances(split);return transfers.every(t=>split.settledKeys.includes(t.from+'→'+t.to));}
+function calcBalances(sp){const b={};sp.participants.forEach(p=>b[p]=0);const n=sp.participants.length;if(!n)return{balances:b,transfers:[]};sp.expenses.forEach(ex=>{b[ex.p]=(b[ex.p]||0)+ex.a;});const total=sp.expenses.reduce((s,e)=>s+e.a,0),share=total/n;sp.participants.forEach(p=>b[p]-=share);const debtors=[],creditors=[];sp.participants.forEach(p=>{const v=Math.round(b[p]*100)/100;if(v<-0.01)debtors.push({n:p,a:-v});else if(v>0.01)creditors.push({n:p,a:v});});debtors.sort((a,b)=>b.a-a.a);creditors.sort((a,b)=>b.a-a.a);const transfers=[];let i=0,j=0;while(i<debtors.length&&j<creditors.length){const d=debtors[i],cr=creditors[j],amt=Math.min(d.a,cr.a);if(amt>0.01)transfers.push({from:d.n,to:cr.n,amount:Math.round(amt*100)/100});d.a-=amt;cr.a-=amt;if(d.a<0.01)i++;if(cr.a<0.01)j++;}return{balances:b,transfers};}
+function allSettled(sp){const{transfers}=calcBalances(sp);return transfers.every(t=>sp.settledKeys.includes(t.from+'→'+t.to));}
 
-/* ===== IDENTITY ===== */
+function renderPayButtons(upiId,upiParams,isSettled){if(!upiId||isSettled)return'';if(isIOS){return`<div class="flex items-center gap-1 flex-wrap"><a href="gpay://upi/pay?${esc(upiParams)}" class="px-2.5 py-1.5 rounded-lg bg-[#4285F4]/15 border border-[#4285F4]/25 text-blue-300 text-[11px] font-semibold hover:bg-[#4285F4]/25 transition-colors active:scale-95"><i class="fa-brands fa-google mr-0.5"></i>GPay</a><a href="phonepe://pay?${esc(upiParams)}" class="px-2.5 py-1.5 rounded-lg bg-purple-500/15 border border-purple-500/25 text-purple-300 text-[11px] font-semibold hover:bg-purple-500/25 transition-colors active:scale-95"><i class="fa-solid fa-p mr-0.5"></i>PhonePe</a><a href="paytm://pay?${esc(upiParams)}" class="px-2.5 py-1.5 rounded-lg bg-cyan-500/15 border border-cyan-500/25 text-cyan-300 text-[11px] font-semibold hover:bg-cyan-500/25 transition-colors active:scale-95"><i class="fa-solid fa-wallet mr-0.5"></i>Paytm</a><a href="bhim://pay?${esc(upiParams)}" class="px-2.5 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 text-[11px] font-semibold hover:bg-indigo-500/25 transition-colors active:scale-95"><i class="fa-solid fa-shield-halved mr-0.5"></i>BHIM</a><button onclick="copyUpiId('${esc(upiId)}')" class="px-2.5 py-1.5 rounded-lg bg-warn/15 border border-warn/25 text-warn text-[11px] font-semibold hover:bg-warn/25 transition-colors active:scale-95"><i class="fa-regular fa-copy mr-0.5"></i>Copy ID</button></div>`;}return`<a href="upi://pay?${esc(upiParams)}" class="px-3 py-1.5 rounded-lg bg-upi/15 border border-upi/25 text-purple-300 text-xs font-semibold hover:bg-upi/25 transition-colors active:scale-95 inline-flex items-center gap-1"><i class="fa-solid fa-mobile-screen-button"></i>Pay via UPI</a>`;}
+function copyUpiId(id){navigator.clipboard.writeText(id).then(()=>showToast('UPI ID copied! Open your UPI app → Send → Paste','success')).catch(()=>showToast('Copy failed','error'));}
+
 function getIdentity(id){return localStorage.getItem(IDENTITY_KEY+id)||'';}
 function setIdentity(id,name){localStorage.setItem(IDENTITY_KEY+id,name);myIdentity=name;}
 function showIdentityPicker(){if(!currentSplit)return;document.getElementById('identity-choices').innerHTML=currentSplit.participants.map(n=>`<button onclick="pickIdentity('${esc(n)}')" class="w-full py-3 rounded-xl ${n===myIdentity?'bg-accent/20 border border-accent/40 text-accent':'bg-card border border-bdr text-txt hover:bg-elevated'} font-semibold text-sm transition-colors active:scale-95">${n===myIdentity?'<i class="fa-solid fa-check mr-2"></i>':''}${esc(n)}</button>`).join('');document.getElementById('identity-overlay').classList.remove('hidden');document.getElementById('identity-sheet').classList.remove('hidden');}
 function pickIdentity(n){if(!currentSplit)return;setIdentity(currentSplit.id,n);closeIdentityPicker(false);showToast('You are '+n,'success');renderView();}
-function closeIdentityPicker(sk){document.getElementById('identity-overlay').classList.add('hidden');document.getElementById('identity-sheet').classList.add('hidden');if(sk)showToast('Tap the user badge anytime to set name','info');}
+function closeIdentityPicker(sk){document.getElementById('identity-overlay').classList.add('hidden');document.getElementById('identity-sheet').classList.add('hidden');if(sk)showToast('Tap user badge to set name anytime','info');}
 function checkIdentityOnOpen(){if(!currentSplit)return;myIdentity=getIdentity(currentSplit.id);if(!myIdentity)setTimeout(showIdentityPicker,500);}
 
-/* ===== STORAGE ===== */
 function loadSplits(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');}catch(e){return[];}}
 function saveSplits(s){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(s));}catch(e){}}
 function addSplitToStorage(sp){const s=loadSplits();const i=s.findIndex(x=>x.id===sp.id);if(i>=0)s[i]=sp;else s.unshift(sp);saveSplits(s);}
 function updateSplitInStorage(sp){const s=loadSplits();const i=s.findIndex(x=>x.id===sp.id);if(i>=0){s[i]=sp;saveSplits(s);}}
-function cleanupExpired(){saveSplits(loadSplits().filter(s=>!isExpired(s)));}
+function cleanupOld(){saveSplits(loadSplits().filter(s=>s.saved||!isExpired(s)||(Date.now()-s.expiry<THIRTY_DAYS)));}
 
-/* ===== SCREENS ===== */
 function showScreen(n){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));const e=document.getElementById('screen-'+n);if(e){e.classList.add('active');e.classList.add('anim-fade-in');setTimeout(()=>e.classList.remove('anim-fade-in'),300);}}
-
-/* ===== TOAST ===== */
 function showToast(m,t='success'){const c={success:'bg-accent text-bg',error:'bg-danger text-white',info:'bg-card border border-bdr text-txt'};const ic={success:'fa-circle-check',error:'fa-circle-xmark',info:'fa-circle-info'};const e=document.createElement('div');e.className=`toast-msg px-5 py-3 rounded-xl ${c[t]} font-semibold text-sm flex items-center gap-2 shadow-lg`;e.innerHTML=`<i class="fa-solid ${ic[t]}"></i> ${m}`;document.getElementById('toast-container').appendChild(e);setTimeout(()=>{e.style.opacity='0';e.style.transition='opacity .3s';setTimeout(()=>e.remove(),300);},2500);}
 
-/* ===== HOME ===== */
-function renderHome(){cleanupExpired();const s=loadSplits();const c=document.getElementById('home-splits');if(!s.length){c.innerHTML='<div class="text-center py-8"><i class="fa-solid fa-receipt text-bdr text-5xl mb-3 block"></i><p class="text-muted text-sm">No splits yet</p></div>';return;}c.innerHTML=s.map(sp=>{const st=allSettled(sp);const tot=sp.expenses.reduce((s,e)=>s+e.a,0);const me=getIdentity(sp.id);const dl=daysLeft(sp.expiry);return`<div onclick="viewSplit('${sp.id}')" class="bg-card border border-bdr rounded-2xl p-4 cursor-pointer hover:border-accent/40 transition-all active:scale-[0.98]"><div class="flex items-center justify-between mb-2"><span class="text-txt font-bold text-sm">${esc(sp.name)}</span><span class="font-mono text-accent font-bold text-sm">${fa(sp.currency,tot)}</span></div><div class="flex items-center justify-between"><span class="text-muted text-xs">${sp.participants.length} people · ${sp.expenses.length} expense${sp.expenses.length!==1?'s':''}${me?' · <span class="text-accent">'+esc(me)+'</span>':''}</span><span class="text-xs font-semibold ${st?'text-accent':'text-warn'}">${st?'Settled':'Pending'}</span></div>${dl<=3?'<p class="text-danger/70 text-xs mt-2"><i class="fa-solid fa-clock mr-1"></i>Expires in '+dl+'d</p>':''}</div>`;}).join('');}
+function getDateLabel(ts){const d=new Date(ts),now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate());const diff=today-d;const days=Math.floor(diff/864e5);if(days===0)return'Today';if(days===1)return'Yesterday';if(days<7)return'This Week';if(days<30)return'This Month';return'Older';}
+function renderHome(){cleanupOld();const all=loadSplits();if(!all.length){document.getElementById('home-splits').innerHTML='';return;}const groups={};all.forEach(sp=>{const label=getDateLabel(sp.created||Date.now());if(!groups[label])groups[label]=[];groups[label].push(sp);});const order=['Today','Yesterday','This Week','This Month','Older'];let html='';order.forEach(label=>{if(!groups[label])return;html+=`<div class="mb-1"><p class="text-muted/50 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">${label}</p><div class="space-y-2">`;groups[label].forEach(sp=>{const st=allSettled(sp);const tot=sp.expenses.reduce((s,e)=>s+e.a,0);const me=getIdentity(sp.id);const exp=isExpired(sp);const dl=daysLeft(sp.expiry);html+=`<div onclick="viewSplit('${sp.id}')" class="bg-card border ${st?'border-accent/20':exp?'border-danger/20':'border-bdr'} rounded-xl p-3.5 cursor-pointer hover:border-accent/40 transition-all active:scale-[0.98]"><div class="flex items-center justify-between mb-1"><span class="text-txt font-bold text-sm truncate">${esc(sp.name)}</span><span class="font-mono text-accent font-bold text-sm ml-2 flex-shrink-0">${fa(sp.currency,tot)}</span></div><div class="flex items-center justify-between"><span class="text-muted text-xs">${sp.participants.length} people${me?' · <span class="text-accent">'+esc(me)+'</span>':''}</span>${st?'<span class="text-xs font-semibold text-accent"><i class="fa-solid fa-circle-check mr-0.5"></i>Settled</span>':exp?'<span class="text-xs font-semibold text-danger">Expired</span>':'<span class="text-xs font-semibold text-warn">Pending</span>'}</div>${!st&&!exp&&dl<=3?'<p class="text-danger/70 text-xs mt-1.5"><i class="fa-solid fa-clock mr-1"></i>Expires in '+dl+'d</p>':''}${sp.saved?'<p class="text-accent/40 text-[10px] mt-1"><i class="fa-solid fa-bookmark mr-1"></i>Saved</p>':''}</div>`;});html+=`</div></div>`;});document.getElementById('home-splits').innerHTML=html;}
 
-/* ===== CREATE ===== */
-function resetCreateForm(){['cr-amount','cr-desc','cr-name-input','cr-expdesc','cr-upi'].forEach(id=>document.getElementById(id).value='');document.getElementById('cr-currency').value='₹';createParticipants=[];createPayer='';renderCreateChips();updateCreateSummary();}
-function addParticipant(){const inp=document.getElementById('cr-name-input');const n=inp.value.trim();if(!n||n.length>15)return;if(createParticipants.includes(n)){showToast('Already added','error');return;}if(createParticipants.length>=10){showToast('Max 10','error');return;}createParticipants.push(n);if(!createPayer)createPayer=n;inp.value='';renderCreateChips();updateCreateSummary();inp.focus();}
-function removeParticipant(n){createParticipants=createParticipants.filter(x=>x!==n);if(createPayer===n)createPayer=createParticipants[0]||'';renderCreateChips();updateCreateSummary();}
-function selectPayer(n){createPayer=n;renderCreateChips();}
-function renderCreateChips(){document.getElementById('cr-chips').innerHTML=createParticipants.map(n=>`<span class="chip bg-elevated text-txt border border-bdr">${esc(n)}<button onclick="event.stopPropagation();removeParticipant('${esc(n)}')" class="ml-1 text-muted hover:text-danger transition-colors"><i class="fa-solid fa-xmark text-xs"></i></button></span>`).join('');document.getElementById('cr-payer-chips').innerHTML=createParticipants.length?createParticipants.map(n=>`<span onclick="selectPayer('${esc(n)}')" class="chip ${n===createPayer?'bg-accent-dim text-accent border border-accent/50':'bg-elevated text-muted border border-bdr hover:border-accent/30'}">${n===createPayer?'<i class="fa-solid fa-check text-xs"></i>':''}${esc(n)}</span>`).join(''):'<p class="text-muted/50 text-xs">Add people first</p>';}
-function updateCreateSummary(){document.getElementById('cr-submit').disabled=!((parseFloat(document.getElementById('cr-amount').value)||0)>0&&createParticipants.length>=2&&createPayer);}
-function createSplit(){const a=parseFloat(document.getElementById('cr-amount').value),c=document.getElementById('cr-currency').value,nm=document.getElementById('cr-desc').value.trim()||'Expense',ed=document.getElementById('cr-expdesc').value.trim()||'Expense',upi=document.getElementById('cr-upi').value.trim();if(!a||createParticipants.length<2||!createPayer)return;const sp={id:uid(),name:nm,currency:c,participants:[...createParticipants],expenses:[{id:uid(),d:ed,a:a,p:createPayer}],settledKeys:[],upiMap:upi?{[createPayer]:upi}:{},expiry:Date.now()+THIRTY_DAYS};currentSplit=sp;addSplitToStorage(sp);setIdentity(sp.id,createPayer);updateURL(sp);renderView();showScreen('view');setTimeout(openShareSheet,400);}
+function resetCreateForm(){['cr-desc','cr-name-input','cr-upi'].forEach(id=>document.getElementById(id).value='');createParticipants=[];createPayer='';createExpenses=[];renderCreateChips();renderCreateExpenses();updateCreateSummary();}
+function addParticipant(){const inp=document.getElementById('cr-name-input');const n=inp.value.trim();if(!n||n.length>15)return;if(createParticipants.includes(n)){showToast('Already added','error');return;}if(createParticipants.length>=10){showToast('Max 10','error');return;}createParticipants.push(n);if(!createPayer)createPayer=n;inp.value='';ErenderCreateChips();renderCreateExpenses();updateCreateSummary();inp.focus();}
+function removeParticipant(n){createParticipants=createParticipants.filter(x=>x!==n);if(createPayer===n)createPayer=createParticipants[0]||'';createExpenses.forEach(e=>{if(e.p===n)e.p=createParticipants[0]||'';});renderCreateChips();renderCreateExpenses();updateCreateSummary();}
+function renderCreateChips(){document.getElementById('cr-chips').innerHTML=createParticipants.map(n=>`<span class="chip bg-elevated text-txt border border-bdr">${esc(n)}<button onclick="event.stopPropagation();removeParticipant('${esc(n)}')" class="ml-1 text-muted hover:text-danger transition-colors"><i class="fa-solid fa-xmark text-xs"></i></button></span>`).join('');}
+function addCreateExpense(){createExpenses.push({id:uid(),d:'',a:0,p:createParticipants[0]||''});renderCreateExpenses();updateCreateSummary();}
+function removeCreateExpense(id){createExpenses=createExpenses.filter(e=>e.id!==id);renderCreateExpenses();updateCreateSummary();}
+function renderCreateExpenses(){const el=document.getElementById('cr-expenses-list');if(!createExpenses.length){el.innerHTML='<p class="text-muted/40 text-xs text-center py-2">Tap "+ Add Expense" below</p>';return;}el.innerHTML=createExpenses.map((ex,idx)=>`<div class="bg-card border border-bdr rounded-xl p-3 space-y-2"><div class="flex items-center justify-between"><span class="text-muted text-xs font-semibold">Expense ${idx+1}</span><button onclick="removeCreateExpense('${ex.id}')" class="text-muted hover:text-danger transition-colors"><i class="fa-solid fa-trash text-xs"></i></button></div><input type="text" placeholder="Description" maxlength="20" value="${esc(ex.d)}" oninput="createExpenses.find(e=>e.id==='${ex.id}').d=this.value" class="w-full bg-elevated border border-bdr rounded-lg px-3 py-2 text-txt placeholder-muted/50 focus:border-accent transition-colors text-sm"><input type="text" inputmode="decimal" placeholder="Amount" value="${ex.a||''}" oninput="let v=this.value.replace(/[^0-9.]/g,'');this.value=v;createExpenses.find(e=>e.id==='${ex.id}').a=parseFloat(v)||0;updateCreateSummary()" class="w-full bg-elevated border border-bdr rounded-lg px-3 py-2 text-accent font-mono font-bold text-lg placeholder-muted/50 focus:border-accent transition-colors text-center"><div><label class="text-muted text-[10px] font-semibold uppercase tracking-widest mb-1 block">Paid by?</label><div class="flex flex-wrap gap-1.5">${createParticipants.length?createParticipants.map(n=>`<span onclick="createExpenses.find(e=>e.id==='${ex.id}').p='${esc(n)}';renderCreateExpenses()" class="chip text-xs py-1 px-2.5 ${n===ex.p?'bg-accent-dim text-accent border border-accent/40':'bg-elevated text-muted border border-bdr hover:border-accent/30'}">${n===ex.p?'<i class="fa-solid fa-check text-[10px] mr-0.5"></i>':''}${esc(n)}</span>`).join(''):'<p class="text-muted/40 text-xs">Add people first</p>'}</div></div></div>`).join('');}
+function updateCreateSummary(){document.getElementById('cr-submit').disabled=!(createExpenses.some(e=>e.a>0&&e.p)&&createParticipants.length>=2);}
+function createSplit(){const nm=document.getElementById('cr-desc').value.trim()||'Expense',c='₹',upi=document.getElementById('cr-upi').value.trim();const valid=createExpenses.filter(e=>e.a>0&&e.p);if(!valid.length||createParticipants.length<2)return;const expenses=valid.map(e=>({id:uid(),d:e.d||'Expense',a:e.a,p:e.p}));const firstPayer=valid[0].p;const sp={id:uid(),name:nm,currency:c,participants:[...createParticipants],expenses,settledKeys:[],upiMap:upi?{[firstPayer]:upi}:{},expiry:Date.now()+THIRTY_DAYS,created:Date.now(),saved:false};currentSplit=sp;addSplitToStorage(sp);setIdentity(sp.id,firstPayer);updateURL(sp);renderView();showScreen('view');setTimeout(openShareSheet,400);}
 
-/* ===== VIEW ===== */
-function viewSplit(id){const s=loadSplits().find(x=>x.id===id);if(!s){showToast('Not found','error');return;}if(isExpired(s)){showToast('Expired','error');renderHome();return;}currentSplit=s;myIdentity=getIdentity(s.id);updateURL(s);renderView();showScreen('view');checkIdentityOnOpen();}
-
-function renderView(){
-    if(!currentSplit)return;const s=currentSplit;myIdentity=getIdentity(s.id);
-    const{balances,transfers}=calcBalances(s);
-    const totalExp=s.expenses.reduce((sum,e)=>sum+e.a,0);
-    const settled=allSettled(s);
-
-    // Identity badge
-    const badge=document.getElementById('vw-identity-badge'),bname=document.getElementById('vw-identity-name');
-    if(myIdentity){badge.classList.remove('hidden');bname.textContent=myIdentity;}else{badge.classList.add('hidden');}
-    document.getElementById('vw-remind-btn').innerHTML=reminderEnabled?'<i class="fa-solid fa-bell text-accent text-sm"></i>':'<i class="fa-solid fa-bell-slash text-muted text-sm"></i>';
-
-    const isIOSU=/iPad|iPhone|iPod/.test(navigator.userAgent);
-
-    let html=`
-    <!-- Header -->
-    <div class="text-center mb-5 anim-scale-in">
-        <p class="text-muted text-sm mb-1">${esc(s.name)}</p>
-        <p class="font-mono text-txt text-4xl font-bold mb-1">${fa(s.currency,totalExp)}</p>
-        <p class="text-muted text-xs">${s.participants.length} people · ${s.expenses.length} expense${s.expenses.length!==1?'s':''}</p>
-    </div>
-
-    <!-- Expenses -->
-    <div class="mb-5">
-        <div class="flex items-center justify-between mb-2">
-            <p class="text-muted text-xs font-semibold uppercase tracking-widest">Expenses</p>
-            <button onclick="openAddExpense()" class="text-accent text-xs font-semibold hover:text-accent/80 transition-colors"><i class="fa-solid fa-plus mr-1"></i>Add</button>
-        </div>
-        <div class="space-y-1.5">
-            ${s.expenses.map(ex=>`<div class="bg-card border border-bdr rounded-lg px-3.5 py-2.5 flex items-center justify-between">
-                <div><p class="text-txt text-sm font-semibold">${esc(ex.d)}</p><p class="text-muted text-xs">Paid by ${esc(ex.p)}</p></div>
-                <p class="font-mono text-accent font-bold text-sm">${fa(s.currency,ex.a)}</p>
-            </div>`).join('')}
-        </div>
-    </div>
-
-    <!-- Balances -->
-    <div class="mb-5">
-        <p class="text-muted text-xs font-semibold uppercase tracking-widest mb-2">Balances</p>
-        <div class="space-y-1.5">
-            ${s.participants.map(p=>{
-                const b=Math.round(balances[p]*100)/100;
-                const isMe=p===myIdentity;
-                if(Math.abs(b)<0.01)return`<div class="bg-card border border-accent/20 rounded-lg px-3.5 py-2.5 flex items-center justify-between"><div class="flex items-center gap-2"><span class="text-txt text-sm font-semibold">${esc(p)}${isMe?' <span class="text-accent text-xs">(you)</span>':''}</span></div><span class="text-accent text-sm font-semibold">Settled</span></div>`;
-                const owed=b>0;
-                return`<div class="${isMe&&!owed?'bg-danger-dim border border-danger/30':'bg-card border border-bdr'} rounded-lg px-3.5 py-2.5 flex items-center justify-between">
-                    <span class="text-txt text-sm font-semibold">${esc(p)}${isMe?' <span class="text-accent text-xs">(you)</span>':''}</span>
-                    <span class="font-mono text-sm font-bold ${owed?'text-accent':'text-danger'}">${owed?'+':''}${fa(s.currency,Math.abs(b).toFixed(2))} ${owed?'owed':'owes'}</span>
-                </div>`;
-            }).join('')}
-        </div>
-    </div>`;
-
-    // Settlements
-    if(transfers.length){
-        html+=`<div class="mb-5"><p class="text-muted text-xs font-semibold uppercase tracking-widest mb-2">Settle Up</p><div class="space-y-2">`;
-        transfers.forEach(t=>{
-            const key=t.from+'→'+t.to;
-            const isSettled=s.settledKeys.includes(key);
-            const isMyDebt=myIdentity===t.from;
-            const isMyCredit=myIdentity===t.to;
-            const upiId=s.upiMap[t.to]||'';
-            const upiParams=upiId?`pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(t.to)}&am=${t.amount}&cu=INR&tn=${encodeURIComponent('SplitNow: '+s.name)}`:'';
-
-            html+=`<div class="${isSettled?'bg-accent/5 border border-accent/20':isMyDebt?'bg-danger-dim border border-danger/25':'bg-card border border-bdr'} rounded-xl p-3.5">
-                <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center gap-2">
-                        <span class="text-danger font-semibold text-sm">${esc(t.from)}</span>
-                        <i class="fa-solid fa-arrow-right text-muted text-xs"></i>
-                        <span class="text-accent font-semibold text-sm">${esc(t.to)}</span>
-                    </div>
-                    <span class="font-mono font-bold text-sm ${isSettled?'text-accent':'text-txt'}">${fa(s.currency,t.amount)}</span>
-                </div>
-                <div class="flex items-center gap-1.5 flex-wrap">
-                    ${isSettled?`<span class="text-accent text-xs font-semibold"><i class="fa-solid fa-circle-check mr-1"></i>Settled</span>`
-                    :`<button onclick="toggleSettled('${esc(key)}')" class="px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors active:scale-95"><i class="fa-solid fa-check mr-1"></i>Mark Settled</button>
-                    ${upiId?`<a href="${isIOSU?'gpay://upi/pay?':'upi://pay?'}${esc(upiParams)}" class="px-3 py-1.5 rounded-lg bg-upi/15 border border-upi/25 text-purple-300 text-xs font-semibold hover:bg-upi/25 transition-colors active:scale-95"><i class="fa-solid fa-mobile-screen-button mr-1"></i>Pay UPI</a>`:''}
-                    ${isMyCredit?`<button onclick="nudgePerson('${esc(t.from)}',${t.amount})" class="px-3 py-1.5 rounded-lg bg-[#25D366]/15 border border-[#25D366]/25 text-[#25D366] text-xs font-semibold hover:bg-[#25D366]/25 transition-colors active:scale-95"><i class="fa-solid fa-hand-point-right mr-1"></i>Nudge</button>`:''}
-                    `}
-                </div>
-            </div>`;
-        });
-        html+=`</div></div>`;
-    }
-
-    // All settled
-    if(settled)html+=`<div class="bg-accent-dim border border-accent/30 rounded-2xl p-5 text-center mb-5"><i class="fa-solid fa-circle-check text-accent text-4xl mb-2 anim-check-pop"></i><p class="text-accent font-bold text-lg">All Settled!</p></div>`;
-
-    // Actions
-    html+=`<div class="space-y-2">
-        <button onclick="openShareSheet()" class="w-full py-3.5 rounded-xl bg-accent text-bg font-bold text-sm active:scale-95 transition-transform"><i class="fa-solid fa-share-nodes mr-2"></i> Share Split Link</button>
-        <button onclick="saveSplit()" id="vw-save-btn" class="w-full py-3.5 rounded-xl bg-card border border-bdr text-txt font-semibold text-sm hover:bg-elevated transition-colors active:scale-95"><i class="fa-regular fa-bookmark mr-2"></i> Save</button>
-    </div>
-    <p class="mt-4 text-center text-muted/60 text-xs"><i class="fa-regular fa-clock mr-1"></i>Auto-deletes in ${daysLeft(s.expiry)} days</p>`;
-
-    document.getElementById('vw-scroll').innerHTML=html;
-}
-
+function viewSplit(id){const s=loadSplits().find(x=>x.id===id);if(!s){showToast('Not found','error');return;}currentSplit=s;myIdentity=getIdentity(s.id);updateURL(s);renderView();showScreen('view');checkIdentityOnOpen();}
+function renderView(){if(!currentSplit)return;const s=currentSplit;myIdentity=getIdentity(s.id);const{balances,transfers}=calcBalances(s);const totalExp=s.expenses.reduce((sum,e)=>sum+e.a,0);const settled=allSettled(s);const badge=document.getElementById('vw-identity-badge'),bname=document.getElementById('vw-identity-name');if(myIdentity){badge.classList.remove('hidden');bname.textContent=myIdentity;}else{badge.classList.add('hidden');}
+let html=`<div class="text-center mb-5 anim-scale-in"><p class="text-muted text-sm mb-1">${esc(s.name)}</p><p class="font-mono text-txt text-4xl font-bold mb-1">${fa(s.currency,totalExp)}</p><p class="text-muted text-xs">${s.participants.length} people · ${s.expenses.length} expense${s.expenses.length!==1?'s':''}</p></div>`;
+html+=`<div class="mb-5"><p class="text-muted text-xs font-semibold uppercase tracking-widest mb-2">Expenses</p><div class="space-y-1.5 mb-3">${s.expenses.map(ex=>`<div class="bg-card border border-bdr rounded-lg px-3.5 py-2.5 flex items-center justify-between"><div><p class="text-txt text-sm font-semibold">${esc(ex.d)}</p><p class="text-muted text-xs">Paid by ${esc(ex.p)}</p></div><p class="font-mono text-accent font-bold text-sm">${fa(s.currency,ex.a)}</p></div>`).join('')}</div><button onclick="openAddExpense()" class="w-full py-3 rounded-xl bg-accent/10 border-2 border-dashed border-accent/30 text-accent font-bold text-sm hover:bg-accent/15 transition-colors active:scale-95"><i class="fa-solid fa-plus mr-2"></i>Add Expense</button></div>`;
+html+=`<div class="mb-5"><p class="text-muted text-xs font-semibold uppercase tracking-widest mb-2">Balances</p><div class="space-y-1.5">${s.participants.map(p=>{const b=Math.round(balances[p]*100)/100;const isMe=p===myIdentity;if(Math.abs(b)<0.01)return`<div class="bg-card border border-accent/20 rounded-lg px-3.5 py-2.5 flex items-center justify-between"><span class="text-txt text-sm font-semibold">${esc(p)}${isMe?' <span class="text-accent text-xs">(you)</span>':''}</span><span class="text-accent text-sm font-semibold">Settled</span></div>`;const owed=b>0;return`<div class="${isMe&&!owed?'bg-danger-dim border border-danger/30':'bg-card border border-bdr'} rounded-lg px-3.5 py-2.5 flex items-center justify-between"><span class="text-txt text-sm font-semibold">${esc(p)}${isMe?' <span class="text-accent text-xs">(you)</span>':''}</span><span class="font-mono text-sm font-bold ${owed?'text-accent':'text-danger'}">${owed?'+':''}${fa(s.currency,Math.abs(b).toFixed(2))} ${owed?'owed':'owes'}</span></div>`;}).join('')}</div></div>`;
+if(transfers.length){html+=`<div class="mb-5"><p class="text-muted text-xs font-semibold uppercase tracking-widest mb-2">Settle Up</p><div class="space-y-2">`;transfers.forEach(t=>{const key=t.from+'→'+t.to;const isSettled=s.settledKeys.includes(key);const isMyCredit=myIdentity===t.to;const upiId=s.upiMap[t.to]||'';const upiParams=upiId?`pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(t.to)}&am=${t.amount}&cu=INR&tn=${encodeURIComponent('SplitNow: '+s.name)}`:'';html+=`<div class="${isSettled?'bg-accent/5 border border-accent/20':'bg-card border border-bdr'} rounded-xl p-3.5"><div class="flex items-center justify-between mb-2"><div class="flex items-center gap-2"><span class="text-danger font-semibold text-sm">${esc(t.from)}</span><i class="fa-solid fa-arrow-right text-muted text-xs"></i><span class="text-accent font-semibold text-sm">${esc(t.to)}</span></div><span class="font-mono font-bold text-sm ${isSettled?'text-accent':'text-txt'}">${fa(s.currency,t.amount)}</span></div>${isSettled?'<span class="text-accent text-xs font-semibold"><i class="fa-solid fa-circle-check mr-1"></i>Settled</span>':`<div class="flex items-center gap-1.5 flex-wrap">${renderPayButtons(upiId,upiParams,false)}<button onclick="toggleSettled('${esc(key)}')" class="px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors active:scale-95"><i class="fa-solid fa-check mr-1"></i>Settled</button>${isMyCredit?`<button onclick="nudgePerson('${esc(t.from)}',${t.amount},'${esc(t.to)}')" class="px-3 py-1.5 rounded-lg bg-[#25D366]/15 border border-[#25D366]/25 text-[#25D366] text-xs font-semibold hover:bg-[#25D366]/25 transition-colors active:scale-95"><i class="fa-brands fa-whatsapp mr-1"></i>Nudge</button>`:''}</div>`}</div>`;});const owedToMe=transfers.filter(t=>t.to===myIdentity&&!s.settledKeys.includes(t.from+'→'+t.to));if(owedToMe.length>1)html+=`<button onclick="nudgeAll()" class="w-full py-2.5 rounded-xl bg-[#25D366]/15 border border-[#25D366]/25 text-[#25D366] font-bold text-sm hover:bg-[#25D366]/25 transition-colors active:scale-95 mt-2"><i class="fa-brands fa-whatsapp mr-2"></i>Nudge All (${owedToMe.length})</button>`;html+=`</div></div>`;}
+if(settled)html+=`<div class="bg-accent-dim border border-accent/30 rounded-2xl p-5 text-center mb-5"><i class="fa-solid fa-circle-check text-accent text-4xl mb-2 anim-check-pop"></i><p class="text-accent font-bold text-lg">All Settled!</p></div>`;
+html+=`<div class="space-y-2"><button onclick="openShareSheet()" class="w-full py-3.5 rounded-xl bg-accent text-bg font-bold text-sm active:scale-95 transition-transform"><i class="fa-solid fa-share-nodes mr-2"></i>Share Link</button>`;html+=s.saved?`<button onclick="unsaveSplit()" class="w-full py-3.5 rounded-xl bg-card border border-bdr text-txt font-semibold text-sm hover:bg-elevated transition-colors active:scale-95"><i class="fa-solid fa-bookmark mr-2 text-accent"></i>Saved</button>`:`<button onclick="saveSplit()" class="w-full py-3.5 rounded-xl bg-card border border-bdr text-txt font-semibold text-sm hover:bg-elevated transition-colors active:scale-95"><i class="fa-regular fa-bookmark mr-2"></i>Save (keeps forever)</button>`;html+=`<button onclick="deleteSplit()" class="w-full py-3.5 rounded-xl bg-danger-dim border border-danger/20 text-danger font-semibold text-sm hover:bg-danger/15 transition-colors active:scale-95"><i class="fa-solid fa-trash mr-2"></i>Delete</button></div>`;html+=`<p class="mt-4 text-center text-muted/60 text-xs"><i class="fa-regular fa-clock mr-1"></i>${s.saved?'Saved — won\'t expire':'Auto-deletes in '+daysLeft(s.expiry)+' days'}</p>`;document.getElementById('vw-scroll').innerHTML=html;}
 function toggleSettled(key){if(!currentSplit)return;const i=currentSplit.settledKeys.indexOf(key);if(i>=0)currentSplit.settledKeys.splice(i,1);else currentSplit.settledKeys.push(key);updateSplitInStorage(currentSplit);updateURL(currentSplit);renderView();broadcastUpdate(currentSplit);if(allSettled(currentSplit))launchConfetti();}
+function saveSplit(){if(!currentSplit)return;currentSplit.saved=true;updateSplitInStorage(currentSplit);showToast('Saved! Won\'t auto-delete','success');renderView();}
+function unsaveSplit(){if(!currentSplit)return;currentSplit.saved=false;updateSplitInStorage(currentSplit);showToast('Unsaved','info');renderView();}
+function deleteSplit(){if(!currentSplit)return;saveSplits(loadSplits().filter(x=>x.id!==currentSplit.id));currentSplit=null;showToast('Deleted','info');showScreen('home');renderHome();}
 
-/* ===== NUDGE (push reminder via WhatsApp/SMS) ===== */
-function nudgePerson(whoOwes,amount){
-    if(!currentSplit)return;
-    const msg=`Hey ${whoOwes}! You owe ${fa(currentSplit.currency,amount)} for "${currentSplit.name}". Please settle up! \n${getShareURL(currentSplit)}`;
-    // Show nudge options
-    const waURL='https://wa.me/?text='+encodeURIComponent(msg);
-    const smsURL='sms:?body='+encodeURIComponent(msg);
-    // Use native share if available, else open WhatsApp
-    if(navigator.share){
-        navigator.share({title:'Payment Reminder',text:msg}).catch(()=>{window.open(waURL,'_blank');});
-    } else {
-        window.open(waURL,'_blank');
-    }
-    showToast('Nudge sent to '+whoOwes+'!','success');
-}
+function nudgePerson(whoOwes,amount,to){if(!currentSplit)return;const msg=`Hey ${whoOwes}! You owe ${fa(currentSplit.currency,amount)} to ${to} for "${currentSplit.name}". Settle up!\n${getShareURL(currentSplit)}`;if(navigator.share)navigator.share({title:'Payment Reminder',text:msg}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');showToast('Nudge sent!','success');}
+function nudgeAll(){if(!currentSplit)return;const{transfers}=calcBalances(currentSplit);const owed=transfers.filter(t=>t.to===myIdentity&&!currentSplit.settledKeys.includes(t.from+'→'+t.to));if(!owed.length)return;const msg=owed.map(t=>`${t.from} owes ${fa(currentSplit.currency,t.amount)}`).join('\n')+`\n\nFor "${currentSplit.name}" — settle now:\n${getShareURL(currentSplit)}`;if(navigator.share)navigator.share({title:'Payment Reminders',text:msg}).catch(()=>window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'));else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');showToast('Nudge all sent!','success');}
 
-/* ===== ADD EXPENSE ===== */
 let aePayer='';
-function openAddExpense(){if(!currentSplit)return;aePayer=myIdentity||currentSplit.participants[0];document.getElementById('ae-desc').value='';document.getElementById('ae-amount').value='';renderAePayerChips();document.getElementById('addexp-overlay').classList.remove('hidden');document.getElementById('addexp-sheet').classList.remove('hidden');}
+function openAddExpense(){if(!currentSplit)return;aePayer=myIdentity||currentSplit.participants[0];document.getElementById('ae-desc').value='';document.getElementById('ae-amount').value='';document.getElementById('ae-added-msg').classList.add('hidden');renderAePayerChips();document.getElementById('addexp-overlay').classList.remove('hidden');document.getElementById('addexp-sheet').classList.remove('hidden');setTimeout(()=>document.getElementById('ae-desc').focus(),300);}
 function closeAddExpense(){document.getElementById('addexp-overlay').classList.add('hidden');document.getElementById('addexp-sheet').classList.add('hidden');}
 function renderAePayerChips(){if(!currentSplit)return;document.getElementById('ae-payer-chips').innerHTML=currentSplit.participants.map(n=>`<span onclick="aePayer='${esc(n)}';renderAePayerChips()" class="chip ${n===aePayer?'bg-accent-dim text-accent border border-accent/50':'bg-elevated text-muted border border-bdr hover:border-accent/30'}">${n===aePayer?'<i class="fa-solid fa-check text-xs"></i>':''}${esc(n)}</span>`).join('');}
-function submitExpense(){
-    if(!currentSplit)return;
-    const desc=document.getElementById('ae-desc').value.trim()||'Expense';
-    const amt=parseFloat(document.getElementById('ae-amount').value);
-    if(!amt||amt<=0){showToast('Enter a valid amount','error');return;}
-    if(!aePayer){showToast('Select who paid','error');return;}
-    if(currentSplit.expenses.length>=20){showToast('Max 20 expenses','error');return;}
-    currentSplit.expenses.push({id:uid(),d:desc,a:amt,p:aePayer});
-    // Clear settlements since balances changed
-    currentSplit.settledKeys=[];
-    updateSplitInStorage(currentSplit);updateURL(currentSplit);closeAddExpense();renderView();broadcastUpdate(currentSplit);
-    showToast(`${desc} (${fa(currentSplit.currency,amt)}) added!`,'success');
-}
+function submitExpense(closeAfter){if(!currentSplit)return;const desc=document.getElementById('ae-desc').value.trim()||'Expense';const amt=parseFloat(document.getElementById('ae-amount').value);if(!amt||amt<=0){showToast('Enter amount','error');return;}if(!aePayer){showToast('Select who paid','error');return;}if(currentSplit.expenses.length>=20){showToast('Max 20 expenses','error');return;}currentSplit.expenses.push({id:uid(),d:desc,a:amt,p:aePayer});currentSplit.settledKeys=[];updateSplitInStorage(currentSplit);updateURL(currentSplit);renderView();broadcastUpdate(currentSplit);document.getElementById('ae-added-msg').classList.remove('hidden');document.getElementById('ae-added-text').textContent=`${desc} (${fa(currentSplit.currency,amt)}) added!`;if(closeAfter){closeAddExpense();showToast(`${desc} added!`,'success');}else{document.getElementById('ae-desc').value='';document.getElementById('ae-amount').value='';document.getElementById('ae-desc').focus();}}
 
-/* ===== URL ===== */
 function updateURL(s){history.replaceState(null,'','#s='+encodeSplit(s));}
 function loadFromURL(){const h=window.location.hash;if(!h.startsWith('#s='))return null;return decodeSplit(h.slice(3));}
 
-/* ===== SHARE ===== */
 function openShareSheet(){if(!currentSplit)return;document.getElementById('share-link-input').value=getShareURL(currentSplit);document.getElementById('share-overlay').classList.remove('hidden');document.getElementById('share-sheet').classList.remove('hidden');}
 function closeShareSheet(){document.getElementById('share-overlay').classList.add('hidden');document.getElementById('share-sheet').classList.add('hidden');}
-function getShareText(){if(!currentSplit)return'';const{transfers}=calcBalances(currentSplit);const my=transfers.filter(t=>t.from===myIdentity);if(my.length){return my.map(t=>`You owe ${fa(currentSplit.currency,t.amount)} to ${t.to} for "${currentSplit.name}"`).join('. ')+'.\n'+getShareURL(currentSplit);}return`Split: "${currentSplit.name}" — ${fa(currentSplit.currency,currentSplit.expenses.reduce((s,e)=>s+e.a,0))}\n${getShareURL(currentSplit)}`;}
+function getShareText(){if(!currentSplit)return'';const{transfers}=calcBalances(currentSplit);const my=transfers.filter(t=>t.from===myIdentity);if(my.length)return my.map(t=>`You owe ${fa(currentSplit.currency,t.amount)} to ${t.to} for "${currentSplit.name}"`).join('. ')+'.\n'+getShareURL(currentSplit);return`Split: "${currentSplit.name}" — ${fa(currentSplit.currency,currentSplit.expenses.reduce((s,e)=>s+e.a,0))}\n${getShareURL(currentSplit)}`;}
 function shareWhatsApp(){window.open('https://wa.me/?text='+encodeURIComponent(getShareText()),'_blank');closeShareSheet();}
 function shareSMS(){window.open('sms:?body='+encodeURIComponent(getShareText()),'_blank');closeShareSheet();}
-function shareNative(){if(!currentSplit)return;if(navigator.share){navigator.share({title:'SplitNow',text:getShareText(),url:getShareURL(currentSplit)}).catch(()=>{});}else copyLink();closeShareSheet();}
+function shareNative(){if(!currentSplit)return;if(navigator.share)navigator.share({title:'SplitNow',text:getShareText(),url:getShareURL(currentSplit)}).catch(()=>{});else copyLink();closeShareSheet();}
 function copyLink(){if(!currentSplit)return;navigator.clipboard.writeText(getShareURL(currentSplit)).then(()=>showToast('Copied!','success')).catch(()=>showToast('Failed','error'));closeShareSheet();}
-function saveSplit(){if(!currentSplit)return;if(loadSplits().some(s=>s.id===currentSplit.id))showToast('Already saved','info');else{addSplitToStorage(currentSplit);showToast('Saved!','success');renderView();}}
 
-/* ===== CHIME ===== */
 function playChime(){try{const ctx=new(window.AudioContext||window.webkitAudioContext)(),now=ctx.currentTime;[[523.25,0],[659.25,0.18],[783.99,0.36]].forEach(([f,d])=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.setValueAtTime(f,now);o.connect(g);g.connect(ctx.destination);const t=now+d;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.12,t+0.04);g.gain.exponentialRampToValueAtTime(0.001,t+1.5);o.start(t);o.stop(t+1.6);});const so=ctx.createOscillator(),sg=ctx.createGain();so.type='sine';so.frequency.setValueAtTime(261.63,now);so.connect(sg);sg.connect(ctx.destination);sg.gain.setValueAtTime(0,now+0.3);sg.gain.linearRampToValueAtTime(0.04,now+0.34);sg.gain.exponentialRampToValueAtTime(0.001,now+2);so.start(now+0.3);so.stop(now+2.1);}catch(e){}}
 
-/* ===== REMINDER ===== */
-function toggleReminderSetting(){reminderEnabled=!reminderEnabled;document.getElementById('vw-remind-btn').innerHTML=reminderEnabled?'<i class="fa-solid fa-bell text-accent text-sm"></i>':'<i class="fa-solid fa-bell-slash text-muted text-sm"></i>';showToast(reminderEnabled?'Reminders ON':'Reminders OFF','info');localStorage.setItem('splitnow_reminder',reminderEnabled?'1':'0');}
-function testReminder(){if(!currentSplit)return;if(allSettled(currentSplit)){showToast('All settled!','success');return;}if(myIdentity){const{transfers}=calcBalances(currentSplit);const myDebt=transfers.find(t=>t.from===myIdentity&&!currentSplit.settledKeys.includes(t.from+'→'+t.to));if(!myDebt){showToast('You have no pending payments','success');return;}document.getElementById('reminder-msg').textContent=`You owe ${fa(currentSplit.currency,myDebt.amount)} to ${myDebt.to} for "${currentSplit.name}"`;}else{const{transfers}=calcBalances(currentSplit);document.getElementById('reminder-msg').textContent=`Pending payments for "${currentSplit.name}"`;}document.getElementById('reminder-overlay').classList.remove('hidden');playChime();reminderTimeout=setTimeout(dismissReminder,10000);}
+function toggleReminderSetting(){reminderEnabled=!reminderEnabled;showToast(reminderEnabled?'Reminders ON':'Reminders OFF','info');localStorage.setItem('splitnow_reminder',reminderEnabled?'1':'0');}
+function startNotifScheduler(){setInterval(()=>{if(!reminderEnabled)return;const n=new Date();if((n.getHours()===10&&n.getMinutes()===0)||(n.getHours()===20&&n.getMinutes()===0))checkAndRemind();},60000);}
+function checkAndRemind(){const splits=loadSplits().filter(s=>!isExpired(s)&&!allSettled(s));for(const sp of splits){const me=getIdentity(sp.id);if(me){const{transfers}=calcBalances(sp);if(transfers.some(t=>t.from===me&&!sp.settledKeys.includes(t.from+'→'+t.to))){currentSplit=sp;myIdentity=me;const myDebt=transfers.find(t=>t.from===me&&!sp.settledKeys.includes(t.from+'→'+t.to));document.getElementById('reminder-msg').textContent=`You owe ${fa(sp.currency,myDebt.amount)} to ${myDebt.to} for "${sp.name}"`;document.getElementById('reminder-overlay').classList.remove('hidden');playChime();reminderTimeout=setTimeout(dismissReminder,10000);return;}}}}
 function dismissReminder(){document.getElementById('reminder-overlay').classList.add('hidden');if(reminderTimeout)clearTimeout(reminderTimeout);}
-function startNotifScheduler(){setInterval(()=>{if(!reminderEnabled)return;const n=new Date();if((n.getHours()===10&&n.getMinutes()===0)||(n.getHours()===20&&n.getMinutes()===0))checkAndRemind();},60000);setInterval(()=>{if(!reminderEnabled)return;const l=parseInt(localStorage.getItem('splitnow_lastremind')||'0');if(Date.now()-l>180000)checkAndRemind();},180000);}
-function checkAndRemind(){const splits=loadSplits().filter(s=>!isExpired(s)&&!allSettled(s));for(const sp of splits){const me=getIdentity(sp.id);if(me){const{transfers}=calcBalances(sp);if(transfers.some(t=>t.from===me&&!sp.settledKeys.includes(t.from+'→'+t.to))){currentSplit=sp;myIdentity=me;const myDebt=transfers.find(t=>t.from===me&&!sp.settledKeys.includes(t.from+'→'+t.to));document.getElementById('reminder-msg').textContent=`You owe ${fa(sp.currency,myDebt.amount)} to ${myDebt.to} for "${sp.name}"`;document.getElementById('reminder-overlay').classList.remove('hidden');playChime();reminderTimeout=setTimeout(dismissReminder,10000);localStorage.setItem('splitnow_lastremind',Date.now().toString());return;}}}}
 
-/* ===== CONFETTI ===== */
 function launchConfetti(){const c=['#00E68A','#FFB020','#FF4070','#6E6EFF','#00D4FF'];for(let i=0;i<40;i++){const e=document.createElement('div');e.style.cssText=`position:fixed;top:-10px;left:${Math.random()*100}%;width:${6+Math.random()*6}px;height:${6+Math.random()*6}px;background:${c[Math.floor(Math.random()*c.length)]};border-radius:${Math.random()>0.5?'50%':'2px'};z-index:150;pointer-events:none;animation:confetti-fall ${1.5+Math.random()*2}s ease-in ${Math.random()*0.5}s forwards;`;document.body.appendChild(e);setTimeout(()=>e.remove(),4000);}}
 
-/* ===== SYNC ===== */
 function onSyncMessage(e){if(e.data&&e.data.type==='update'){const s=e.data.split;if(currentSplit&&currentSplit.id===s.id){currentSplit=s;renderView();}renderHome();}}
 function broadcastUpdate(s){if(bc)try{bc.postMessage({type:'update',split:s});}catch(e){}}
 
-/* ===== DEMO ===== */
-function loadDemo(){const d={id:uid(),name:'Goa Trip',currency:'₹',participants:['Rahul','Priya','Amit','Neha'],expenses:[{id:uid(),d:'Hotel',a:6000,p:'Rahul'},{id:uid(),d:'Dinner',a:2400,p:'Priya'},{id:uid(),d:'Cab',a:800,p:'Rahul'}],settledKeys:[],upiMap:{'Rahul':'rahul@paytm'},expiry:Date.now()+THIRTY_DAYS};currentSplit=d;addSplitToStorage(d);setIdentity(d.id,'Rahul');updateURL(d);renderView();showScreen('view');showToast('Demo — you are Rahul','success');}
+function loadDemo(){const now=Date.now();const d1={id:uid(),name:'Saturday Badminton',currency:'₹',participants:['You','Ravi','Suresh','Manoj'],expenses:[{id:uid(),d:'Court Booking',a:800,p:'You'},{id:uid(),d:'Chai',a:120,p:'Ravi'},{id:uid(),d:'Shuttlecocks',a:350,p:'Suresh'}],settledKeys:[],upiMap:{'You':'you@paytm'},expiry:now+THIRTY_DAYS,created:now,saved:false};const d2={id:uid(),name:'Office Lunch',currency:'₹',participants:['You','Sneha','Vikram'],expenses:[{id:uid(),d:'Biryani',a:900,p:'Sneha'},{id:uid(),d:'Cold Drinks',a:150,p:'You'}],settledKeys:['Vikram→Sneha'],upiMap:{'Sneha':'sneha@upi'},expiry:now+THIRTY_DAYS,created:now-86400000,saved:true};saveSplits([d1,d2]);currentSplit=d1;setIdentity(d1.id,'You');updateURL(d1);renderView();showScreen('view');showToast('Demo loaded!','success');}
 
-/* ===== INIT ===== */
-function init(){reminderEnabled=localStorage.getItem('splitnow_reminder')!=='0';cleanupExpired();const shared=loadFromURL();if(shared&&!isExpired(shared)){currentSplit=shared;addSplitToStorage(shared);myIdentity=getIdentity(shared.id);renderView();showScreen('view');checkIdentityOnOpen();if('Notification' in window&&Notification.permission==='default')Notification.requestPermission();}else renderHome();startNotifScheduler();window.addEventListener('hashchange',()=>{const s=loadFromURL();if(s&&!isExpired(s)){currentSplit=s;addSplitToStorage(s);myIdentity=getIdentity(s.id);renderView();showScreen('view');checkIdentityOnOpen();}});}
-document.addEventListener('DOMContentLoaded',()=>{document.getElementById('cr-amount').addEventListener('input',function(){let v=this.value.replace(/[^0-9.]/g,'');const p=v.split('.');if(p.length>2)v=p[0]+'.'+p.slice(1).join('');this.value=v;updateCreateSummary();});document.getElementById('ae-amount').addEventListener('input',function(){let v=this.value.replace(/[^0-9.]/g,'');const p=v.split('.');if(p.length>2)v=p[0]+'.'+p.slice(1).join('');this.value=v;});});
+function init(){reminderEnabled=localStorage.getItem('splitnow_reminder')!=='0';cleanupOld();const shared=loadFromURL();if(shared){currentSplit=shared;addSplitToStorage(shared);myIdentity=getIdentity(shared.id);renderView();showScreen('view');checkIdentityOnOpen();}else renderHome();startNotifScheduler();window.addEventListener('hashchange',()=>{const s=loadFromURL();if(s){currentSplit=s;addSplitToStorage(s);myIdentity=getIdentity(s.id);renderView();showScreen('view');checkIdentityOnOpen();}});}
+document.addEventListener('DOMContentLoaded',()=>{document.getElementById('ae-amount').addEventListener('input',function(){let v=this.value.replace(/[^0-9.]/g,'');const p=v.split('.');if(p.length>2)v=p[0]+'.'+p.slice(1).join('');this.value=v;});});
 init();
 </script>
 </body>
