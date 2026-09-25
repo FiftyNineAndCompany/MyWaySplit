@@ -3,124 +3,175 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FairShare - Supabase Edition</title>
+    <title>FairShare - Split & Settle</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f0f4f8;
+            /* Techy Grid Background */
+            background-image: 
+                linear-gradient(rgba(99, 102, 241, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(99, 102, 241, 0.05) 1px, transparent 1px);
+            background-size: 30px 30px;
+            background-position: center center;
+            overflow-x: hidden;
+        }
+        h1, h2, h3, .font-display { font-family: 'Space Grotesk', sans-serif; }
+        
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Floating Emojis Animation */
+        .floating-bg { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: -1; overflow: hidden; }
+        .float-item { position: absolute; opacity: 0.1; font-size: 2rem; animation: floatUp 20s linear infinite; }
+        @keyframes floatUp {
+            0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+            10% { opacity: 0.15; }
+            90% { opacity: 0.15; }
+            100% { transform: translateY(-100px) rotate(360deg); opacity: 0; }
+        }
+
         #toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 50; display: flex; flex-direction: column; gap: 0.5rem; }
-        .toast { padding: 1rem; border-radius: 0.5rem; color: white; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); transition: opacity 0.3s; }
-        .modal-bg { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); }
+        .toast { padding: 1rem; border-radius: 0.75rem; color: white; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); transition: opacity 0.3s; font-weight: 500; }
+        .modal-bg { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(8px); }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
-<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+<body class="text-slate-800 antialiased min-h-screen flex flex-col relative">
+
+    <div class="floating-bg">
+        <div class="float-item" style="left: 10%; animation-delay: 0s;">💸</div>
+        <div class="float-item" style="left: 30%; animation-delay: 5s;">🧾</div>
+        <div class="float-item" style="left: 50%; animation-delay: 2s;">💻</div>
+        <div class="float-item" style="left: 70%; animation-delay: 8s;">💰</div>
+        <div class="float-item" style="left: 90%; animation-delay: 12s;">📊</div>
+    </div>
 
     <div id="toast-container"></div>
 
-    <!-- Identity Modal (Forces user to interact so we can request notification/audio permissions) -->
+    <!-- Identity Modal (Forces user interaction for Notification APIs) -->
     <div id="identity-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-bg hidden fade-in">
-        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full mx-4">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full mx-4 border border-slate-100">
             <div class="text-center mb-6">
-                <div class="bg-indigo-100 text-indigo-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div class="bg-indigo-100 text-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 transform rotate-3">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
                 </div>
-                <h2 class="text-2xl font-bold text-slate-800">Who is viewing?</h2>
-                <p class="text-slate-500 mt-2 text-sm">Select your name to see your balances and enable payment reminders.</p>
+                <h2 class="text-2xl font-bold text-slate-800 font-display">Who is viewing?</h2>
+                <p class="text-slate-500 mt-2 text-sm">Select your identity to enable system payment reminders and calculate your exact debts.</p>
             </div>
-            <div id="identity-list" class="space-y-3 max-h-60 overflow-y-auto mb-4">
+            <div id="identity-list" class="space-y-3 max-h-60 overflow-y-auto mb-4 p-1">
                 <div class="text-center text-slate-400 italic text-sm py-4">Loading participants...</div>
             </div>
-            <button onclick="setIdentity(null)" class="w-full py-3 text-slate-500 hover:text-slate-800 font-medium text-sm transition">
+            <button onclick="setIdentity(null)" class="w-full py-3 text-slate-400 hover:text-slate-600 font-medium text-sm transition">
                 I'm just a guest
             </button>
         </div>
     </div>
 
     <!-- Debtor Warning Banner -->
-    <div id="debtor-banner" class="hidden bg-rose-500 text-white px-4 py-3 text-center shadow-md relative z-40">
+    <div id="debtor-banner" class="hidden bg-rose-500 text-white px-4 py-3 text-center shadow-lg relative z-40">
         <p class="font-medium flex items-center justify-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
-            <span id="debtor-text">You have pending settlements!</span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 animate-pulse" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+            <span id="debtor-text">You have pending settlements globally!</span>
         </p>
     </div>
 
-    <div class="max-w-6xl mx-auto px-4 py-8 flex-1 w-full">
-        <header class="mb-8 text-center md:text-left flex flex-col md:flex-row justify-between items-center gap-4">
-            <div>
-                <h1 class="text-4xl font-bold text-indigo-600 flex items-center justify-center md:justify-start gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+    <div class="max-w-6xl mx-auto px-4 py-8 flex-1 w-full z-10 relative">
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-center gap-4 bg-white/50 p-4 rounded-2xl backdrop-blur-sm border border-slate-200 shadow-sm">
+            <div class="text-center md:text-left">
+                <h1 class="text-4xl font-bold text-indigo-600 flex items-center justify-center md:justify-start gap-3 font-display tracking-tight">
+                    <div class="bg-indigo-600 text-white p-2 rounded-xl transform -rotate-6 shadow-md">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
                     FairShare
                 </h1>
-                <p class="text-slate-500 mt-2 text-lg">Cloud-synced expense splitting.</p>
+                <p class="text-slate-500 mt-1 text-sm font-medium">Auto-deleting 14-day history. Supabase connected.</p>
             </div>
-            <div class="flex items-center gap-3">
-                <div id="current-user-badge" class="hidden bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    Viewing as: <span id="current-user-name" class="font-bold"></span>
+            <div class="flex flex-wrap justify-center items-center gap-3">
+                <button onclick="handleStartNewSheet()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-medium text-sm shadow-md transition flex items-center gap-2 transform hover:scale-105">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                    Start New Sheet
+                </button>
+                <div id="current-user-badge" class="hidden bg-white border border-indigo-100 text-indigo-700 px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 shadow-sm">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span id="current-user-name" class="font-bold"></span>
                 </div>
             </div>
         </header>
 
         <!-- Setup Warning for Developer -->
-        <div id="setup-warning" class="hidden mb-8 bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg shadow-sm">
-            <h3 class="text-amber-800 font-bold text-lg">Supabase Configuration Required</h3>
-            <p class="text-amber-700 mt-1">Please update the `SUPABASE_URL` and `SUPABASE_ANON_KEY` in the code.</p>
+        <div id="setup-warning" class="hidden mb-8 bg-amber-50 border border-amber-200 p-5 rounded-2xl shadow-sm">
+            <h3 class="text-amber-800 font-bold text-lg flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                Supabase Configuration Required
+            </h3>
+            <p class="text-amber-700 mt-2 text-sm">Please update the <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> in the script.</p>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <!-- Left Column: Inputs -->
             <div class="lg:col-span-5 space-y-6">
                 
                 <!-- History Toggle -->
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-2 flex">
-                    <button id="tab-active" onclick="setViewMode('active')" class="flex-1 py-2 rounded-lg font-semibold text-sm bg-indigo-600 text-white shadow-sm transition">Current Group</button>
-                    <button id="tab-history" onclick="setViewMode('history')" class="flex-1 py-2 rounded-lg font-medium text-sm text-slate-500 hover:text-slate-700 transition">Past Settlements</button>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-1.5 flex gap-1">
+                    <button id="tab-active" onclick="setViewMode('active')" class="flex-1 py-2.5 rounded-lg font-semibold text-sm bg-indigo-600 text-white shadow-sm transition">Current Sheet</button>
+                    <button id="tab-history" onclick="setViewMode('history')" class="flex-1 py-2.5 rounded-lg font-medium text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition">Past Settlements</button>
                 </div>
 
-                <!-- Add Participant -->
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hide-on-history">
-                    <h2 class="text-xl font-semibold mb-4 border-b border-slate-100 pb-2 text-slate-700">1. Add Participants</h2>
-                    <div class="space-y-3 mb-4">
-                        <input type="text" id="part-name" placeholder="Name (e.g., Rahul)" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none">
-                        <input type="text" id="part-upi" placeholder="UPI ID (optional)" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none">
-                        <button onclick="handleAddParticipant()" id="btn-add-part" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition shadow-sm flex justify-center items-center">
-                            Add Participant
-                        </button>
+                <!-- Manage Participants -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-xl font-bold mb-4 font-display text-slate-800" id="part-form-title">1. Manage Participants</h2>
+                    <div class="space-y-3 mb-5">
+                        <input type="hidden" id="part-edit-id">
+                        <input type="text" id="part-name" placeholder="Name (e.g., Rahul)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition">
+                        <input type="text" id="part-upi" placeholder="Compulsory UPI ID / Mobile" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition">
+                        <div class="flex gap-2">
+                            <button onclick="handleAddParticipant()" id="btn-add-part" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-semibold transition shadow-sm flex justify-center items-center">
+                                Add Participant
+                            </button>
+                            <button onclick="cancelPartEdit()" id="btn-cancel-part" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 px-4 rounded-xl font-semibold transition">
+                                Cancel
+                            </button>
+                        </div>
                     </div>
-                    <div class="bg-slate-50 rounded-lg p-3 min-h-[60px]">
+                    <div class="bg-slate-50 rounded-xl p-4 min-h-[60px] border border-slate-100">
                         <ul id="participants-list" class="flex flex-wrap gap-2 text-sm">
-                            <li class="text-slate-400 italic" id="empty-part-msg">Loading...</li>
+                            <li class="text-slate-400 italic text-sm" id="empty-part-msg">Loading...</li>
                         </ul>
                     </div>
                 </div>
 
                 <!-- Add/Edit Expense -->
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hide-on-history">
-                    <h2 class="text-xl font-semibold mb-4 border-b border-slate-100 pb-2 text-slate-700" id="expense-form-title">2. Record Expense</h2>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hide-on-history">
+                    <h2 class="text-xl font-bold mb-4 font-display text-slate-800" id="expense-form-title">2. Record Expense</h2>
                     <div class="space-y-4">
                         <input type="hidden" id="exp-edit-id">
                         <div>
-                            <input type="text" id="exp-desc" placeholder="What was it for? (e.g., Dinner)" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <input type="text" id="exp-desc" placeholder="What was it for? (e.g., Dinner)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition">
                         </div>
                         <div class="flex gap-3">
-                            <div class="relative w-1/3">
-                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">₹</span>
-                                <input type="number" id="exp-amount" placeholder="0.00" class="w-full border border-slate-300 rounded-lg pl-8 pr-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <div class="relative w-2/5">
+                                <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 font-medium">₹</span>
+                                <input type="number" id="exp-amount" placeholder="0.00" class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-4 py-3 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition">
                             </div>
-                            <select id="exp-payer" class="w-2/3 border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                            <select id="exp-payer" class="w-3/5 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition appearance-none">
                                 <option value="">Who paid?</option>
                             </select>
                         </div>
-                        <div class="flex gap-2">
-                            <button onclick="handleAddExpense()" id="btn-add-exp" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-semibold transition shadow-sm mt-2 flex justify-center items-center">
+                        <div class="flex gap-2 pt-2">
+                            <button onclick="handleAddExpense()" id="btn-add-exp" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-semibold transition shadow-sm flex justify-center items-center">
                                 Save Expense
                             </button>
-                            <button onclick="cancelEdit()" id="btn-cancel-exp" class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 py-3 px-4 rounded-lg font-semibold transition mt-2">
+                            <button onclick="cancelExpEdit()" id="btn-cancel-exp" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 px-4 rounded-xl font-semibold transition">
                                 Cancel
                             </button>
                         </div>
@@ -132,34 +183,34 @@
             <div class="lg:col-span-7 space-y-6">
                 <!-- Dashboard Summary -->
                 <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex flex-col justify-center items-center">
-                        <span class="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Total Spent</span>
-                        <span class="text-3xl font-bold text-slate-800" id="total-spent">₹0.00</span>
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-center items-center relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-20 h-20 bg-rose-500/5 rounded-bl-full"></div>
+                        <span class="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">Total Spent</span>
+                        <span class="text-4xl font-black text-slate-800 font-display tracking-tight" id="total-spent">₹0</span>
                     </div>
-                    <div class="bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex flex-col justify-center items-center">
-                        <span class="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1" id="group-label">Active Group</span>
-                        <span class="text-3xl font-bold text-slate-800" id="total-group">0</span>
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-center items-center relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-20 h-20 bg-indigo-500/5 rounded-bl-full"></div>
+                        <span class="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1" id="group-label">Active Sheet</span>
+                        <span class="text-4xl font-black text-slate-800 font-display tracking-tight" id="total-group">0</span>
                     </div>
                 </div>
 
                 <!-- Settlement Plan -->
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col">
-                    <div class="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
-                        <h2 class="text-xl font-semibold text-slate-700" id="settlement-title">3. Settlement Plan</h2>
-                        <button onclick="handleArchiveExpenses()" id="btn-archive" class="text-xs bg-rose-50 text-rose-600 hover:bg-rose-100 px-3 py-1.5 rounded border border-rose-200 font-medium transition hide-on-history hidden">
-                            Archive & Start Fresh Sheet
-                        </button>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col">
+                    <div class="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
+                        <h2 class="text-xl font-bold font-display text-slate-800" id="settlement-title">3. Final Settlements</h2>
+                        <span class="text-xs bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full font-medium" id="settlement-count">0</span>
                     </div>
                     <div id="settlement-list" class="space-y-3">
-                        <div class="text-center py-6 text-slate-400 italic">Loading settlements...</div>
+                        <div class="text-center py-8 text-slate-400 italic text-sm">Loading data...</div>
                     </div>
                 </div>
 
                 <!-- Recent Expenses -->
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h2 class="text-xl font-semibold mb-4 border-b border-slate-100 pb-2 text-slate-700" id="expense-list-title">Recent Transactions</h2>
-                    <ul id="expenses-list" class="divide-y divide-slate-100 max-h-[400px] overflow-y-auto pr-2">
-                        <li class="py-4 text-center text-slate-400 italic" id="empty-exp-msg">Loading...</li>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-xl font-bold mb-4 font-display text-slate-800 pb-2 border-b border-slate-100" id="expense-list-title">Recent Transactions</h2>
+                    <ul id="expenses-list" class="divide-y divide-slate-50 max-h-[400px] overflow-y-auto pr-2">
+                        <li class="py-4 text-center text-slate-400 italic text-sm" id="empty-exp-msg">Loading...</li>
                     </ul>
                 </div>
             </div>
@@ -179,72 +230,22 @@
             participants: [],
             expenses: [],
             viewMode: 'active', // 'active' or 'history'
-            currentUser: null,  // The participant ID looking at the screen
+            currentUser: null,  
         };
 
-        // --- AUDIO / NOTIFICATION SYSTEM ---
+        // --- BACKGROUND NOTIFICATION LOGIC ---
         let lastReminderKey = '';
 
-        function calculateGlobalDebt() {
-            if (!state.currentUser || state.participants.length === 0) return 0;
-            
-            // Calculate balances across ALL expenses (active and archived)
-            const balances = {};
-            state.participants.forEach(p => balances[p.id] = 0);
-
-            state.expenses.forEach(exp => {
-                const amount = Number(exp.amount);
-                if (balances[exp.paid_by] !== undefined) balances[exp.paid_by] += amount;
-                const splitAmount = amount / state.participants.length;
-                state.participants.forEach(p => balances[p.id] -= splitAmount);
-            });
-
-            // Find debtors and creditors
-            let debtors = []; let creditors = [];
-            for (const [id, balance] of Object.entries(balances)) {
-                const rounded = Math.round(balance * 100) / 100;
-                if (rounded < 0) debtors.push({ id, amount: Math.abs(rounded) });
-                else if (rounded > 0) creditors.push({ id, amount: rounded });
-            }
-
-            debtors.sort((a, b) => b.amount - a.amount);
-            creditors.sort((a, b) => b.amount - a.amount);
-
-            // Calculate exact owed amount for the current user globally
-            let totalOwed = 0;
-            let i = 0; let j = 0;
-            while (i < debtors.length && j < creditors.length) {
-                let d = debtors[i]; let c = creditors[j];
-                let settledAmount = Math.min(d.amount, c.amount);
-                
-                if (settledAmount > 0.01 && d.id === state.currentUser) {
-                    totalOwed += settledAmount;
-                }
-                d.amount -= settledAmount; c.amount -= settledAmount;
-                if (d.amount < 0.01) i++;
-                if (c.amount < 0.01) j++;
-            }
-            return totalOwed;
-        }
-
-        function playBeep() {
-            try {
-                // Generates a clean digital beep using Web Audio API (No files needed!)
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.frequency.value = 880; // High pitch
-                osc.type = 'sine';
-                osc.start();
-                gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 1);
-                setTimeout(() => osc.stop(), 1000);
-            } catch (e) { console.log("Audio play failed, user didn't interact yet.", e); }
+        // This function would ideally send the token to a backend for true offline push.
+        // For now, we simulate the token capture to show proper architecture.
+        async function registerPushToken(userId) {
+            console.log(`[Architecture Note] Device token would be requested here and mapped to userId: ${userId} in a 'push_tokens' table.`);
+            // e.g., const token = await nativePushManager.subscribe();
+            // supabaseClient.from('push_tokens').insert({ user_id: userId, token: token });
         }
 
         function triggerReminderLoop() {
-            // Checks the clock every 10 seconds.
+            // Checks clock every 10 seconds. Fires native system notification exactly at 10:00 & 16:00.
             setInterval(() => {
                 const globalDebt = calculateGlobalDebt();
                 if (!state.currentUser || globalDebt <= 0) return;
@@ -253,17 +254,16 @@
                 const hour = now.getHours();
                 const min = now.getMinutes();
                 
-                // Fire exactly at 10:00 AM and 16:00 (4:00 PM)
+                // 10 AM and 4 PM
                 if ((hour === 10 || hour === 16) && min === 0) {
                     const key = `${now.toDateString()}-${hour}`;
                     if (lastReminderKey !== key) {
                         lastReminderKey = key;
-                        playBeep(); // Play sound
                         
-                        // Show OS Notification if granted
+                        // Using standard Web Notification API triggers the default System Sound!
                         if (Notification.permission === 'granted') {
                             new Notification("FairShare Reminder 💰", {
-                                body: `Hey! You still owe a total of ₹${globalDebt.toFixed(2)}. Please check past & active settlements!`,
+                                body: `You have unsettled debts totaling ₹${globalDebt.toFixed(2)}. Open the app to settle up!`,
                                 icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
                             });
                         } else {
@@ -274,15 +274,19 @@
             }, 10000);
         }
 
-        // --- UI UTILITIES ---
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
-            const bgClass = type === 'error' ? 'bg-red-500' : type === 'success' ? 'bg-emerald-500' : 'bg-indigo-500';
-            toast.className = `toast ${bgClass} fade-in`;
-            toast.innerHTML = `<span>${message}</span>`;
+            const bgClass = type === 'error' ? 'bg-rose-500' : type === 'success' ? 'bg-emerald-500' : 'bg-slate-800';
+            toast.className = `toast ${bgClass} fade-in flex items-center gap-2`;
+            
+            let icon = '';
+            if (type === 'success') icon = `<svg class="w-5 h-5 text-emerald-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+            if (type === 'error') icon = `<svg class="w-5 h-5 text-rose-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+
+            toast.innerHTML = `${icon} <span>${message}</span>`;
             container.appendChild(toast);
-            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3500);
         }
 
         function setLoading(btnId, isLoading, defaultText = "Save") {
@@ -291,7 +295,7 @@
             if (isLoading) {
                 btn.disabled = true;
                 btn.classList.add('opacity-75', 'cursor-not-allowed');
-                btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2 border-t-2 border-b-2 border-white rounded-full" viewBox="0 0 24 24"></svg> Processing...`;
+                btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-2 border-t-2 border-b-2 border-white rounded-full" viewBox="0 0 24 24"></svg> Wait...`;
             } else {
                 btn.disabled = false;
                 btn.classList.remove('opacity-75', 'cursor-not-allowed');
@@ -299,7 +303,6 @@
             }
         }
 
-        // --- INITIALIZATION ---
         async function init() {
             if (!isConfigured) {
                 document.getElementById('setup-warning').classList.remove('hidden');
@@ -310,9 +313,9 @@
 
             try {
                 supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                await cleanOldHistory(); // Requirement: Keep only 2 weeks history
                 await fetchData();
                 
-                // Show Identity Modal if we don't know who this is yet
                 const savedUser = localStorage.getItem('fairshare_user');
                 if (savedUser) {
                     setIdentity(savedUser, true);
@@ -321,10 +324,16 @@
                 }
                 
                 triggerReminderLoop();
-            } catch (err) {
-                console.error("Initialization error:", err);
-                showToast("Failed to connect to database.", "error");
-            }
+            } catch (err) { showToast("Failed to connect to database.", "error"); }
+        }
+
+        async function cleanOldHistory() {
+            // Deletes expenses older than 14 days directly from Supabase
+            const twoWeeksAgo = new Date();
+            twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+            try {
+                await supabaseClient.from('expenses').delete().lt('created_at', twoWeeksAgo.toISOString());
+            } catch (e) { console.log("Silent cleanup failed", e); }
         }
 
         async function fetchData() {
@@ -336,28 +345,23 @@
                 const { data: exps, error: expsErr } = await supabaseClient.from('expenses').select('*').order('created_at', { ascending: false });
                 if (expsErr) throw expsErr;
                 
-                // Ensure is_archived exists, default to false if undefined
                 state.expenses = (exps || []).map(e => ({...e, is_archived: e.is_archived || false}));
 
                 populateIdentityModal();
                 renderAll();
-            } catch (err) {
-                console.error("Fetch error:", err);
-                showToast("Database error.", "error");
-            }
+            } catch (err) { showToast("Database error.", "error"); }
         }
 
-        // --- IDENTITY & PERMISSIONS ---
         function populateIdentityModal() {
             const list = document.getElementById('identity-list');
             if (state.participants.length === 0) {
-                list.innerHTML = `<div class="text-center text-slate-400 italic text-sm">No participants found. Add someone first!</div>`;
+                list.innerHTML = `<div class="text-center text-slate-400 italic text-sm">No participants yet. Close this and add one!</div>`;
                 return;
             }
             list.innerHTML = state.participants.map(p => 
-                `<button onclick="setIdentity('${p.id}')" class="w-full text-left bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 p-3 rounded-lg font-medium text-slate-700 transition flex justify-between items-center">
+                `<button onclick="setIdentity('${p.id}')" class="w-full text-left bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 p-4 rounded-xl font-semibold text-slate-700 transition flex justify-between items-center group">
                     ${p.name}
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-indigo-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
+                    <span class="text-xs font-normal text-slate-400 group-hover:text-indigo-500">${p.upi_id}</span>
                 </button>`
             ).join('');
         }
@@ -373,64 +377,98 @@
                     document.getElementById('current-user-badge').classList.remove('hidden');
                     document.getElementById('current-user-name').textContent = user.name;
                     
-                    // The magic trick: Since this was triggered by a user click, we can now safely ask for permissions!
                     if (!fromStorage && "Notification" in window) {
                         Notification.requestPermission();
-                        playBeep(); // Play a silent sound to unlock audio
+                        registerPushToken(id); // For backend
                     }
                 }
             }
             renderAll();
         }
 
-        // --- VIEW MODES ---
         function setViewMode(mode) {
             state.viewMode = mode;
-            
-            // Toggle Tab Styles
             const btnActive = document.getElementById('tab-active');
             const btnHist = document.getElementById('tab-history');
             
             if (mode === 'active') {
-                btnActive.className = "flex-1 py-2 rounded-lg font-semibold text-sm bg-indigo-600 text-white shadow-sm transition";
-                btnHist.className = "flex-1 py-2 rounded-lg font-medium text-sm text-slate-500 hover:text-slate-700 transition";
-                document.getElementById('settlement-title').textContent = "3. Settlement Plan";
+                btnActive.className = "flex-1 py-2.5 rounded-lg font-semibold text-sm bg-indigo-600 text-white shadow-sm transition";
+                btnHist.className = "flex-1 py-2.5 rounded-lg font-medium text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition";
+                document.getElementById('settlement-title').textContent = "3. Final Settlements";
                 document.getElementById('expense-list-title').textContent = "Recent Transactions";
-                document.getElementById('group-label').textContent = "Active Group";
+                document.getElementById('group-label').textContent = "Active Sheet";
             } else {
-                btnHist.className = "flex-1 py-2 rounded-lg font-semibold text-sm bg-indigo-600 text-white shadow-sm transition";
-                btnActive.className = "flex-1 py-2 rounded-lg font-medium text-sm text-slate-500 hover:text-slate-700 transition";
-                document.getElementById('settlement-title').textContent = "Archived Settlements";
+                btnHist.className = "flex-1 py-2.5 rounded-lg font-semibold text-sm bg-indigo-600 text-white shadow-sm transition";
+                btnActive.className = "flex-1 py-2.5 rounded-lg font-medium text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition";
+                document.getElementById('settlement-title').textContent = "Unpaid History (Past 14 Days)";
                 document.getElementById('expense-list-title').textContent = "Archived Transactions";
-                document.getElementById('group-label').textContent = "All Time Group";
+                document.getElementById('group-label').textContent = "Archived Sheet";
             }
 
-            // Hide/Show UI Elements
-            document.querySelectorAll('.hide-on-history').forEach(el => {
-                el.style.display = mode === 'history' ? 'none' : 'block';
-            });
-
-            cancelEdit();
+            document.querySelectorAll('.hide-on-history').forEach(el => { el.style.display = mode === 'history' ? 'none' : 'block'; });
+            cancelExpEdit(); cancelPartEdit();
             renderAll();
         }
 
-        // --- CRUD ACTIONS ---
         async function handleAddParticipant() {
+            const id = document.getElementById('part-edit-id').value;
             const name = document.getElementById('part-name').value.trim();
             const upi = document.getElementById('part-upi').value.trim();
+            
             if (!name) return showToast("Name is required.", "error");
+            if (!upi) return showToast("UPI ID or Mobile is required.", "error"); // Compulsory
 
-            setLoading('btn-add-part', true, "Add Participant");
+            setLoading('btn-add-part', true, id ? "Update" : "Add");
             try {
-                const { data, error } = await supabaseClient.from('participants').insert([{ name, upi_id: upi }]).select();
-                if (error) throw error;
-                state.participants.push(data[0]);
-                document.getElementById('part-name').value = ''; document.getElementById('part-upi').value = '';
-                showToast("Participant added!", "success");
+                if (id) {
+                    const { error } = await supabaseClient.from('participants').update({ name, upi_id: upi }).eq('id', id);
+                    if (error) throw error;
+                    const idx = state.participants.findIndex(p => p.id === id);
+                    if (idx > -1) { state.participants[idx].name = name; state.participants[idx].upi_id = upi; }
+                    showToast("Participant updated!", "success");
+                } else {
+                    const { data, error } = await supabaseClient.from('participants').insert([{ name, upi_id: upi }]).select();
+                    if (error) throw error;
+                    state.participants.push(data[0]);
+                    showToast("Participant added!", "success");
+                }
+                cancelPartEdit();
                 populateIdentityModal();
                 renderAll();
-            } catch (err) { showToast("Failed to add.", "error"); } 
-            finally { setLoading('btn-add-part', false, "Add Participant"); }
+            } catch (err) { showToast("Failed to save participant.", "error"); } 
+            finally { setLoading('btn-add-part', false, id ? "Update" : "Add"); }
+        }
+
+        function editParticipant(id) {
+            const p = state.participants.find(p => p.id === id);
+            if (!p) return;
+            document.getElementById('part-edit-id').value = p.id;
+            document.getElementById('part-name').value = p.name;
+            document.getElementById('part-upi').value = p.upi_id;
+            
+            document.getElementById('part-form-title').textContent = "Edit Participant";
+            document.getElementById('btn-add-part').textContent = "Update";
+            document.getElementById('btn-cancel-part').classList.remove('hidden');
+        }
+
+        function cancelPartEdit() {
+            document.getElementById('part-edit-id').value = '';
+            document.getElementById('part-name').value = '';
+            document.getElementById('part-upi').value = '';
+            document.getElementById('part-form-title').textContent = "1. Manage Participants";
+            document.getElementById('btn-add-part').textContent = "Add Participant";
+            document.getElementById('btn-cancel-part').classList.add('hidden');
+        }
+
+        async function deleteParticipant(id) {
+            if (!confirm("Delete participant? (Ensure they have no active expenses first)")) return;
+            try {
+                const { error } = await supabaseClient.from('participants').delete().eq('id', id);
+                if (error) throw error;
+                state.participants = state.participants.filter(p => p.id !== id);
+                showToast("Participant removed.", "success");
+                renderAll();
+            } catch (err) { showToast("Cannot delete (likely has linked expenses).", "error"); }
         }
 
         async function handleAddExpense() {
@@ -441,7 +479,7 @@
 
             if (!desc || isNaN(amount) || amount <= 0 || !payerId) return showToast("Fill all fields correctly.", "error");
 
-            setLoading('btn-add-exp', true, id ? "Update Expense" : "Save Expense");
+            setLoading('btn-add-exp', true, id ? "Update" : "Save");
             try {
                 if (id) {
                     const { error } = await supabaseClient.from('expenses').update({ description: desc, amount, paid_by: payerId }).eq('id', id);
@@ -455,10 +493,10 @@
                     state.expenses.unshift(data[0]);
                     showToast("Expense recorded!", "success");
                 }
-                cancelEdit();
+                cancelExpEdit();
                 renderAll();
-            } catch (err) { showToast("Failed to save expense.", "error"); } 
-            finally { setLoading('btn-add-exp', false, id ? "Update Expense" : "Save Expense"); }
+            } catch (err) { showToast("Failed to save.", "error"); } 
+            finally { setLoading('btn-add-exp', false, id ? "Update" : "Save"); }
         }
 
         function editExpense(id) {
@@ -470,12 +508,11 @@
             document.getElementById('exp-payer').value = exp.paid_by;
             
             document.getElementById('expense-form-title').textContent = "Edit Expense";
-            document.getElementById('btn-add-exp').textContent = "Update Expense";
+            document.getElementById('btn-add-exp').textContent = "Update";
             document.getElementById('btn-cancel-exp').classList.remove('hidden');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        function cancelEdit() {
+        function cancelExpEdit() {
             document.getElementById('exp-edit-id').value = '';
             document.getElementById('exp-desc').value = '';
             document.getElementById('exp-amount').value = '';
@@ -486,7 +523,7 @@
         }
 
         async function deleteExpense(id) {
-            if (!confirm("Are you sure you want to delete this expense?")) return;
+            if (!confirm("Are you sure?")) return;
             try {
                 const { error } = await supabaseClient.from('expenses').delete().eq('id', id);
                 if (error) throw error;
@@ -496,11 +533,12 @@
             } catch (err) { showToast("Failed to delete.", "error"); }
         }
 
-        async function handleArchiveExpenses() {
+        // START NEW SHEET LOGIC
+        async function handleStartNewSheet() {
             const activeExps = state.expenses.filter(e => e.is_archived === false);
-            if (activeExps.length === 0) return showToast("No active expenses to archive.");
+            if (activeExps.length === 0) return showToast("Sheet is already fresh!");
             
-            if (!confirm("Are you sure you want to archive the current expenses and start a fresh sheet? Any unpaid debts will be moved to 'Past Settlements'.")) return;
+            if (!confirm("Start a new sheet? This will move all current expenses to History. Your debts will remain active until paid.")) return;
             
             const ids = activeExps.map(e => e.id);
             try {
@@ -508,22 +546,46 @@
                 if (error) throw error;
                 
                 state.expenses.forEach(e => { if (ids.includes(e.id)) e.is_archived = true; });
-                showToast("Everything settled and archived!", "success");
-                renderAll();
-            } catch (err) {
-                console.error(err);
-                showToast("Failed to archive.", "error");
-            }
+                showToast("New sheet started! Old items moved to History.", "success");
+                setViewMode('active'); // Force back to active view
+            } catch (err) { showToast("Failed to start new sheet.", "error"); }
         }
 
-        // --- RENDERING ---
+        function calculateGlobalDebt() {
+            if (!state.currentUser || state.participants.length === 0) return 0;
+            const balances = {};
+            state.participants.forEach(p => balances[p.id] = 0);
+            state.expenses.forEach(exp => {
+                const amount = Number(exp.amount);
+                if (balances[exp.paid_by] !== undefined) balances[exp.paid_by] += amount;
+                const splitAmount = amount / state.participants.length;
+                state.participants.forEach(p => balances[p.id] -= splitAmount);
+            });
+            let debtors = []; let creditors = [];
+            for (const [id, balance] of Object.entries(balances)) {
+                const rounded = Math.round(balance * 100) / 100;
+                if (rounded < 0) debtors.push({ id, amount: Math.abs(rounded) });
+                else if (rounded > 0) creditors.push({ id, amount: rounded });
+            }
+            debtors.sort((a, b) => b.amount - a.amount);
+            creditors.sort((a, b) => b.amount - a.amount);
+            
+            let totalOwed = 0; let i = 0; let j = 0;
+            while (i < debtors.length && j < creditors.length) {
+                let d = debtors[i]; let c = creditors[j];
+                let settledAmount = Math.min(d.amount, c.amount);
+                if (settledAmount > 0.01 && d.id === state.currentUser) totalOwed += settledAmount;
+                d.amount -= settledAmount; c.amount -= settledAmount;
+                if (d.amount < 0.01) i++;
+                if (c.amount < 0.01) j++;
+            }
+            return totalOwed;
+        }
+
         function renderAll() {
             renderParticipants();
-            
-            // Filter expenses based on viewMode
             const isHistory = state.viewMode === 'history';
             const visibleExpenses = state.expenses.filter(e => isHistory ? e.is_archived === true : e.is_archived === false);
-            
             renderExpenses(visibleExpenses);
             calculateAndRenderSettlements(visibleExpenses);
         }
@@ -531,7 +593,6 @@
         function renderParticipants() {
             const list = document.getElementById('participants-list');
             const select = document.getElementById('exp-payer');
-            document.getElementById('total-group').textContent = state.participants.length;
 
             if (state.participants.length === 0) {
                 list.innerHTML = `<li class="text-slate-400 italic text-sm">No participants added yet.</li>`;
@@ -540,14 +601,20 @@
             }
 
             list.innerHTML = state.participants.map(p => 
-                `<li class="bg-indigo-100 text-indigo-800 px-3 py-1.5 rounded-full font-medium flex flex-col text-xs fade-in border border-indigo-200">
-                    <span class="text-sm">${p.name} ${p.id === state.currentUser ? '(You)' : ''}</span>
+                `<li class="bg-white border border-indigo-100 shadow-sm rounded-lg pl-3 pr-1 py-1.5 flex items-center gap-2 text-sm fade-in group">
+                    <div class="flex flex-col">
+                        <span class="font-semibold text-slate-700 leading-tight">${p.name} ${p.id === state.currentUser ? '<span class="text-indigo-500">(You)</span>' : ''}</span>
+                        <span class="text-[10px] text-slate-400 font-medium">${p.upi_id}</span>
+                    </div>
+                    <div class="flex flex-col gap-0 border-l border-slate-100 pl-1 ml-1 opacity-20 group-hover:opacity-100 transition-opacity">
+                        <button onclick="editParticipant('${p.id}')" class="text-indigo-400 hover:text-indigo-600 p-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
+                        <button onclick="deleteParticipant('${p.id}')" class="text-rose-400 hover:text-rose-600 p-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                    </div>
                 </li>`
             ).join('');
 
             const currentSelected = select.value;
-            select.innerHTML = '<option value="">Who paid?</option>' + 
-                state.participants.map(p => `<option value="${p.id}" ${p.id === currentSelected ? 'selected' : ''}>${p.name}</option>`).join('');
+            select.innerHTML = '<option value="">Who paid?</option>' + state.participants.map(p => `<option value="${p.id}" ${p.id === currentSelected ? 'selected' : ''}>${p.name}</option>`).join('');
         }
 
         function renderExpenses(visibleExpenses) {
@@ -557,9 +624,10 @@
             let total = 0;
             visibleExpenses.forEach(e => total += Number(e.amount));
             document.getElementById('total-spent').textContent = `₹${total.toFixed(2)}`;
+            document.getElementById('total-group').textContent = visibleExpenses.length;
 
             if (visibleExpenses.length === 0) {
-                list.innerHTML = `<li class="py-4 text-center text-slate-400 italic">No ${isHistory ? 'archived' : 'active'} expenses found.</li>`;
+                list.innerHTML = `<li class="py-8 text-center text-slate-400 italic text-sm">No ${isHistory ? 'past' : 'active'} expenses found.</li>`;
                 return;
             }
 
@@ -568,21 +636,23 @@
                 const payerName = payer ? payer.name : 'Unknown';
                 const dateStr = exp.created_at ? new Date(exp.created_at).toLocaleDateString() : 'Just now';
                 
-                const actionButtons = isHistory ? '' : `
-                    <div class="flex gap-2 opacity-50 hover:opacity-100 transition mt-2 sm:mt-0">
-                        <button onclick="editExpense('${exp.id}')" class="p-1.5 bg-slate-100 text-indigo-600 rounded hover:bg-indigo-100"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
-                        <button onclick="deleteExpense('${exp.id}')" class="p-1.5 bg-slate-100 text-rose-600 rounded hover:bg-rose-100"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                    </div>`;
-
                 return `
-                <li class="py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center fade-in border-b border-slate-50 last:border-0">
-                    <div class="flex flex-col">
-                        <span class="font-semibold text-slate-800">${exp.description}</span>
-                        <span class="text-xs text-slate-500">Paid by <span class="font-medium text-slate-700">${payerName}</span> on ${dateStr}</span>
+                <li class="py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center fade-in group">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold shadow-inner text-sm">
+                            ${payerName.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="flex flex-col">
+                            <span class="font-bold text-slate-800">${exp.description}</span>
+                            <span class="text-xs text-slate-400 font-medium">Paid by <span class="text-slate-600">${payerName}</span> • ${dateStr}</span>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end mt-2 sm:mt-0">
-                        <span class="font-bold text-slate-800 text-lg">₹${Number(exp.amount).toFixed(2)}</span>
-                        ${actionButtons}
+                    <div class="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end mt-3 sm:mt-0">
+                        <span class="font-black text-slate-800 text-lg font-display tracking-tight">₹${Number(exp.amount).toFixed(2)}</span>
+                        <div class="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onclick="editExpense('${exp.id}')" class="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
+                            <button onclick="deleteExpense('${exp.id}')" class="p-2 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                        </div>
                     </div>
                 </li>`;
             }).join('');
@@ -590,26 +660,21 @@
 
         function calculateAndRenderSettlements(visibleExpenses) {
             const container = document.getElementById('settlement-list');
-            const archiveBtn = document.getElementById('btn-archive');
+            const countBadge = document.getElementById('settlement-count');
             
-            // Check Global Debt instead of just local tab debt
+            // Global Banner Logic
             const globalDebt = calculateGlobalDebt();
-            if (globalDebt > 0) {
-                document.getElementById('debtor-banner').classList.remove('hidden');
-                document.getElementById('debtor-text').textContent = `You have a total pending debt of ₹${globalDebt.toFixed(2)}. Check active and past settlements!`;
-            } else {
-                document.getElementById('debtor-banner').classList.add('hidden');
-            }
+            if (globalDebt > 0) document.getElementById('debtor-banner').classList.remove('hidden');
+            else document.getElementById('debtor-banner').classList.add('hidden');
 
             if (state.participants.length === 0 || visibleExpenses.length === 0) {
-                container.innerHTML = `<div class="text-center py-6 text-slate-400 italic">No expenses to settle here.</div>`;
-                if(archiveBtn) archiveBtn.classList.add('hidden');
+                container.innerHTML = `<div class="text-center py-8 text-slate-400 italic text-sm">Add expenses to see the math.</div>`;
+                countBadge.textContent = "0";
                 return;
             }
 
             const balances = {};
             state.participants.forEach(p => balances[p.id] = 0);
-
             visibleExpenses.forEach(exp => {
                 const amount = Number(exp.amount);
                 if (balances[exp.paid_by] !== undefined) balances[exp.paid_by] += amount;
@@ -626,63 +691,54 @@
 
             debtors.sort((a, b) => b.amount - a.amount);
             creditors.sort((a, b) => b.amount - a.amount);
-
-            const settlements = [];
-            let i = 0; let j = 0;
+            const settlements = []; let i = 0; let j = 0;
 
             while (i < debtors.length && j < creditors.length) {
                 let d = debtors[i]; let c = creditors[j];
                 let settledAmount = Math.min(d.amount, c.amount);
-                
-                if (settledAmount > 0.01) {
-                    settlements.push({
-                        from: state.participants.find(p => p.id === d.id),
-                        to: state.participants.find(p => p.id === c.id),
-                        amount: settledAmount
-                    });
-                }
+                if (settledAmount > 0.01) settlements.push({ from: state.participants.find(p => p.id === d.id), to: state.participants.find(p => p.id === c.id), amount: settledAmount });
                 d.amount -= settledAmount; c.amount -= settledAmount;
                 if (d.amount < 0.01) i++;
                 if (c.amount < 0.01) j++;
             }
 
+            countBadge.textContent = settlements.length;
+
             if (settlements.length === 0) {
-                container.innerHTML = `<div class="text-center py-6 text-emerald-600 bg-emerald-50 rounded-lg font-medium border border-emerald-100">All settled up!</div>`;
-                if(archiveBtn) archiveBtn.classList.add('hidden');
+                container.innerHTML = `<div class="text-center py-6 text-emerald-600 bg-emerald-50 rounded-xl font-bold border border-emerald-100 flex items-center justify-center gap-2">🎉 All settled up!</div>`;
                 return;
             }
 
-            if (state.viewMode === 'active' && archiveBtn) archiveBtn.classList.remove('hidden');
-            else if(archiveBtn) archiveBtn.classList.add('hidden');
-
             container.innerHTML = settlements.map(s => {
-                let upiButton = '';
-                if (s.to.upi_id) {
-                    const upiUrl = `upi://pay?pa=${encodeURIComponent(s.to.upi_id)}&pn=${encodeURIComponent(s.to.name)}&am=${s.amount.toFixed(2)}&cu=INR`;
-                    upiButton = `<a href="${upiUrl}" target="_blank" class="ml-auto bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-2 rounded-md font-medium transition shadow-sm flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg> Pay UPI</a>`;
-                }
+                const upiUrl = `upi://pay?pa=${encodeURIComponent(s.to.upi_id)}&pn=${encodeURIComponent(s.to.name)}&am=${s.amount.toFixed(2)}&cu=INR`;
+                const whatsappMsg = encodeURIComponent(`Hey! Just a reminder to pay ₹${s.amount.toFixed(2)} for our expenses on FairShare. UPI: ${s.to.upi_id}`);
+                const whatsappUrl = `https://wa.me/?text=${whatsappMsg}`;
 
-                // Highlight if the logged-in user is involved
                 const isUserDebtor = state.currentUser === s.from.id;
-                const isUserCreditor = state.currentUser === s.to.id;
-                const highlightClass = isUserDebtor ? 'bg-rose-50 border-rose-200' : (isUserCreditor ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200');
+                const highlightClass = isUserDebtor ? 'bg-rose-50/50 border-rose-200' : 'bg-slate-50 border-slate-200';
 
                 return `
-                <div class="flex items-center justify-between p-4 rounded-lg border fade-in flex-wrap gap-2 ${highlightClass}">
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm shadow-inner">
-                            ${s.from.name.charAt(0).toUpperCase()}
+                <div class="flex items-center justify-between p-4 rounded-xl border fade-in flex-wrap gap-4 ${highlightClass} transition hover:shadow-md">
+                    <div class="flex items-center gap-4">
+                        <div class="relative">
+                            <div class="w-10 h-10 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm shadow-inner z-10 relative border-2 border-white">${s.from.name.charAt(0).toUpperCase()}</div>
+                            <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shadow-inner absolute top-0 left-6 border-2 border-white">${s.to.name.charAt(0).toUpperCase()}</div>
                         </div>
-                        <div class="font-medium text-slate-700">
-                            ${isUserDebtor ? '<span class="font-bold text-rose-600">You</span> owe' : `<span>${s.from.name}</span> owes`} 
-                            ${isUserCreditor ? '<span class="font-bold text-emerald-600">You</span>' : `<span>${s.to.name}</span>`}
+                        <div class="font-medium text-slate-700 ml-4">
+                            ${isUserDebtor ? '<span class="font-bold text-rose-600">You</span> owe' : `<span class="font-bold text-slate-800">${s.from.name}</span> owes`} 
+                            <span class="font-bold text-slate-800">${s.to.name}</span>
                         </div>
                     </div>
-                    <div class="flex items-center gap-3 w-full sm:w-auto mt-2 sm:mt-0 justify-end flex-1">
-                        <div class="font-bold text-slate-800 bg-white px-3 py-1 rounded-md shadow-sm border border-slate-200">
-                            ₹${s.amount.toFixed(2)}
-                        </div>
-                        ${upiButton}
+                    <div class="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0 justify-end flex-1">
+                        <div class="font-black text-slate-800 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 font-display">₹${s.amount.toFixed(2)}</div>
+                        
+                        <!-- Actions -->
+                        <a href="${whatsappUrl}" target="_blank" class="p-2 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg transition" title="Remind on WhatsApp">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                        </a>
+                        <a href="${upiUrl}" target="_blank" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-2 rounded-lg font-semibold transition shadow-md flex items-center gap-1">
+                            Pay UPI
+                        </a>
                     </div>
                 </div>`;
             }).join('');
