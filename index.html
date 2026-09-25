@@ -3,599 +3,462 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FairShare - Advanced Expense Splitter</title>
+    <title>FairShare - Supabase Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-        /* Custom scrollbar for aesthetic */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        /* Toast notification styling */
+        #toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 50; display: flex; flex-direction: column; gap: 0.5rem; }
+        .toast { padding: 1rem; rounded-lg; color: white; shadow-lg; transition: opacity 0.3s; }
     </style>
 </head>
-<body class="text-slate-800 antialiased min-h-screen pb-12">
+<body class="text-slate-800 antialiased min-h-screen">
 
-<div class="max-w-6xl mx-auto px-4 py-8">
-    
-    <!-- Top Bar -->
-    <header class="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
-        <div>
-            <h1 class="text-4xl font-extrabold text-indigo-600 flex items-center gap-3">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                FairShare
-            </h1>
-            <p class="text-slate-500 mt-1 text-sm font-medium">Split expenses. Settle up seamlessly.</p>
+    <div id="toast-container"></div>
+
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <header class="mb-8 text-center md:text-left flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-4xl font-bold text-indigo-600 flex items-center justify-center md:justify-start gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    FairShare
+                </h1>
+                <p class="text-slate-500 mt-2 text-lg">Cloud-synced expense splitting.</p>
+            </div>
+        </header>
+
+        <!-- Setup Warning for Developer -->
+        <div id="setup-warning" class="hidden mb-8 bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg shadow-sm">
+            <h3 class="text-amber-800 font-bold text-lg">Supabase Configuration Required</h3>
+            <p class="text-amber-700 mt-1">Please update the `YOUR_SUPABASE_URL` and `YOUR_SUPABASE_ANON_KEY` in the code.</p>
+            <p class="text-amber-700 mt-2 text-sm font-semibold">Required Database Schema:</p>
+            <ul class="list-disc list-inside text-amber-700 text-sm mt-1">
+                <li>Table <code class="bg-amber-100 px-1 rounded">participants</code>: id (uuid), name (text), upi_id (text)</li>
+                <li>Table <code class="bg-amber-100 px-1 rounded">expenses</code>: id (uuid), description (text), amount (numeric), payer_id (uuid, foreign key)</li>
+            </ul>
         </div>
 
-        <button id="reminder-btn" onclick="setupBackendReminders()" 
-                class="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-full font-medium transition shadow-sm text-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-            <span id="reminder-text">Enable Auto-Reminders</span>
-        </button>
-    </header>
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Left Column: Inputs -->
+            <div class="lg:col-span-5 space-y-6">
+                
+                <!-- Add Participant -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-xl font-semibold mb-4 border-b border-slate-100 pb-2 text-slate-700">1. Add Participants</h2>
+                    <div class="space-y-3 mb-4">
+                        <input type="text" id="part-name" placeholder="Name (e.g., Rahul)" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <input type="text" id="part-upi" placeholder="UPI ID (optional, e.g., rahul@okaxis)" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <button onclick="handleAddParticipant()" id="btn-add-part" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition shadow-sm flex justify-center items-center">
+                            Add Participant
+                        </button>
+                    </div>
+                    <div class="bg-slate-50 rounded-lg p-3 min-h-[60px]">
+                        <ul id="participants-list" class="flex flex-wrap gap-2 text-sm">
+                            <li class="text-slate-400 italic" id="empty-part-msg">Loading...</li>
+                        </ul>
+                    </div>
+                </div>
 
-    <!-- Global Toast Notification Area -->
-    <div id="toast-area" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80"></div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        <!-- LEFT COLUMN: Inputs (Add Users & Expenses) -->
-        <div class="lg:col-span-5 space-y-6">
-            
-            <!-- 1. Add Participant Form -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                <h2 class="text-lg font-bold mb-4 text-slate-800 flex items-center gap-2">
-                    <span class="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-sm">1</span>
-                    Add Participants
-                </h2>
-                <div class="space-y-3">
-                    <input type="text" id="part-name" placeholder="Name (e.g., Rahul)" 
-                           class="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm">
-                    <div class="flex gap-2">
-                        <input type="text" id="part-upi" placeholder="UPI ID (e.g., rahul@okhdfc)" 
-                               class="flex-1 border border-slate-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm">
-                        <button onclick="addParticipant()" 
-                                class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-semibold transition shadow-sm">
-                            Add
+                <!-- Add Expense -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-xl font-semibold mb-4 border-b border-slate-100 pb-2 text-slate-700">2. Record Expense</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <input type="text" id="exp-desc" placeholder="What was it for? (e.g., Dinner)" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div class="flex gap-3">
+                            <div class="relative w-1/3">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">₹</span>
+                                <input type="number" id="exp-amount" placeholder="0.00" class="w-full border border-slate-300 rounded-lg pl-8 pr-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                            </div>
+                            <select id="exp-payer" class="w-2/3 border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                                <option value="">Who paid?</option>
+                            </select>
+                        </div>
+                        <button onclick="handleAddExpense()" id="btn-add-exp" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-semibold transition shadow-sm mt-2 flex justify-center items-center">
+                            Save Expense
                         </button>
                     </div>
                 </div>
-                
-                <!-- Participant Chips -->
-                <div class="mt-4 pt-4 border-t border-slate-100 min-h-[50px]">
-                    <ul id="participants-list" class="flex flex-wrap gap-2 text-sm">
-                        <li class="text-slate-400 italic text-sm" id="empty-part-msg">No participants added.</li>
+            </div>
+
+            <!-- Right Column: Dashboard & Settlements -->
+            <div class="lg:col-span-7 space-y-6">
+                <!-- Dashboard Summary -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex flex-col justify-center items-center">
+                        <span class="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Total Spent</span>
+                        <span class="text-3xl font-bold text-slate-800" id="total-spent">₹0.00</span>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex flex-col justify-center items-center">
+                        <span class="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Active Group</span>
+                        <span class="text-3xl font-bold text-slate-800" id="total-group">0</span>
+                    </div>
+                </div>
+
+                <!-- Settlement Plan -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-xl font-semibold mb-4 border-b border-slate-100 pb-2 text-slate-700">3. Settlement Plan</h2>
+                    <div id="settlement-list" class="space-y-3">
+                        <div class="text-center py-6 text-slate-400 italic">Loading settlements...</div>
+                    </div>
+                </div>
+
+                <!-- Recent Expenses -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-xl font-semibold mb-4 border-b border-slate-100 pb-2 text-slate-700">Recent Transactions</h2>
+                    <ul id="expenses-list" class="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
+                        <li class="py-4 text-center text-slate-400 italic" id="empty-exp-msg">Loading...</li>
                     </ul>
                 </div>
             </div>
-
-            <!-- 2. Add/Edit Expense Form -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 relative">
-                <!-- Overlay when no participants exist -->
-                <div id="expense-overlay" class="absolute inset-0 bg-white/80 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-2xl">
-                    <p class="text-slate-500 font-medium bg-white px-4 py-2 rounded-full shadow-sm border border-slate-100">Add participants first</p>
-                </div>
-
-                <h2 class="text-lg font-bold mb-4 text-slate-800 flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                        <span class="bg-emerald-100 text-emerald-700 w-6 h-6 rounded-full flex items-center justify-center text-sm">2</span>
-                        <span id="expense-form-title">Record Expense</span>
-                    </div>
-                    <button id="cancel-edit-btn" onclick="cancelEdit()" class="hidden text-xs text-slate-500 hover:text-slate-700 font-medium">Cancel Edit</button>
-                </h2>
-                
-                <div class="space-y-4">
-                    <input type="text" id="exp-desc" placeholder="What was it for? (e.g., Dinner)" 
-                           class="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
-                    
-                    <div class="flex gap-3">
-                        <div class="flex-1 relative">
-                            <span class="absolute left-3 top-2.5 text-slate-500">₹</span>
-                            <input type="number" id="exp-amount" placeholder="0.00" min="0" step="1"
-                                   class="w-full border border-slate-300 rounded-xl pl-7 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
-                        </div>
-                        <select id="exp-payer" class="flex-1 border border-slate-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-white">
-                            <option value="">Who paid?</option>
-                        </select>
-                    </div>
-
-                    <!-- Split among checkboxes -->
-                    <div class="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Split Among</label>
-                        <div id="split-checkboxes" class="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
-                            <!-- Populated dynamically -->
-                        </div>
-                    </div>
-
-                    <button id="save-expense-btn" onclick="saveExpense()" 
-                            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-semibold transition shadow-sm mt-2">
-                        Save Expense
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- RIGHT COLUMN -->
-        <div class="lg:col-span-7 space-y-6">
-            
-            <!-- Dashboard Stats -->
-            <div class="grid grid-cols-2 gap-4">
-                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col">
-                    <span class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Total Spent</span>
-                    <span class="text-3xl font-extrabold text-slate-800" id="total-spent">₹0</span>
-                </div>
-                <div class="bg-indigo-600 rounded-2xl p-5 border border-indigo-700 shadow-sm flex flex-col text-white">
-                    <span class="text-indigo-200 text-xs font-bold uppercase tracking-wider mb-1">Active Group</span>
-                    <span class="text-3xl font-extrabold" id="total-people">0</span>
-                </div>
-            </div>
-
-            <!-- Settlement Plan (The Math output) -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                <h2 class="text-lg font-bold mb-4 text-slate-800 flex justify-between items-center border-b border-slate-100 pb-3">
-                    <div class="flex items-center gap-2">
-                        <span class="bg-amber-100 text-amber-700 w-6 h-6 rounded-full flex items-center justify-center text-sm">3</span>
-                        Settlement Plan
-                    </div>
-                </h2>
-                
-                <div id="settlements-list" class="space-y-3">
-                    <div class="text-center py-8 text-slate-400 text-sm italic border-2 border-dashed border-slate-100 rounded-xl">
-                        Add expenses to see who owes whom.
-                    </div>
-                </div>
-            </div>
-
-            <!-- Recent Expenses List -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                <h2 class="text-lg font-bold mb-4 text-slate-800 border-b border-slate-100 pb-3">Recent Transactions</h2>
-                <div class="overflow-hidden">
-                    <ul id="expenses-list" class="divide-y divide-slate-100 max-h-[250px] overflow-y-auto pr-2">
-                        <li class="py-6 text-center text-slate-400 text-sm italic" id="empty-exp-msg">
-                            No transactions yet.
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
         </div>
     </div>
-</div>
 
-<script>
-    // --- STATE MANAGEMENT ---
-    let participants = []; 
-    // Format: { id: string, name: string, upi: string }
-    
-    let expenses = [];     
-    // Format: { id: string, desc: string, amount: number, payerId: string, involvedIds: array, date: string }
-
-    let editingExpenseId = null;
-
-    // --- DOM ELEMENTS ---
-    const DOM = {
-        toastArea: document.getElementById('toast-area'),
-        partName: document.getElementById('part-name'),
-        partUpi: document.getElementById('part-upi'),
-        partList: document.getElementById('participants-list'),
-        emptyPartMsg: document.getElementById('empty-part-msg'),
+    <script>
+        // --- CONFIGURATION ---
+        const SUPABASE_URL = 'https://xmegtdhjigtqsljagwiv.supabase.co/rest/v1/';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtZWd0ZGhqaWd0cXNsamFnd2l2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMTA4ODEsImV4cCI6MjA4Njc4Njg4MX0.5WQ44IJYYCimkRRMeRPETWH0bzEY8th3VFDfOSyUcKQ';
         
-        expenseOverlay: document.getElementById('expense-overlay'),
-        expFormTitle: document.getElementById('expense-form-title'),
-        cancelEditBtn: document.getElementById('cancel-edit-btn'),
-        expDesc: document.getElementById('exp-desc'),
-        expAmount: document.getElementById('exp-amount'),
-        expPayer: document.getElementById('exp-payer'),
-        splitCheckboxes: document.getElementById('split-checkboxes'),
-        saveExpBtn: document.getElementById('save-expense-btn'),
-        
-        totalSpent: document.getElementById('total-spent'),
-        totalPeople: document.getElementById('total-people'),
-        expensesList: document.getElementById('expenses-list'),
-        emptyExpMsg: document.getElementById('empty-exp-msg'),
-        settlementsList: document.getElementById('settlements-list')
-    };
+        let supabaseClient;
+        let isConfigured = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
 
-    // --- TOAST NOTIFICATIONS ---
-    function showToast(message, type = 'success') {
-        const id = Date.now();
-        const colors = {
-            success: 'bg-emerald-600',
-            error: 'bg-red-500',
-            info: 'bg-blue-600'
+        // --- APP STATE ---
+        const state = {
+            participants: [], // { id, name, upi_id }
+            expenses: [],     // { id, description, amount, payer_id }
         };
-        const icon = type === 'success' ? '✓' : type === 'error' ? '!' : 'i';
-        
-        const toast = document.createElement('div');
-        toast.id = `toast-${id}`;
-        toast.className = `${colors[type]} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 fade-in transform transition-all duration-300 translate-x-full`;
-        
-        toast.innerHTML = `
-            <div class="bg-white/20 rounded-full w-6 h-6 flex items-center justify-center font-bold text-sm">${icon}</div>
-            <p class="text-sm font-medium">${message}</p>
-        `;
-        
-        DOM.toastArea.appendChild(toast);
-        
-        // Slide in
-        setTimeout(() => toast.classList.remove('translate-x-full'), 10);
-        
-        // Remove after 3.5s
-        setTimeout(() => {
-            toast.classList.add('opacity-0', 'translate-x-full');
-            setTimeout(() => toast.remove(), 300);
-        }, 3500);
-    }
 
-    // --- GENERATE UNIQUE ID ---
-    function generateId() {
-        return Math.random().toString(36).substring(2, 9);
-    }
-
-    // --- ADD PARTICIPANT ---
-    function addParticipant() {
-        const name = DOM.partName.value.trim();
-        const upi = DOM.partUpi.value.trim();
-
-        if (!name) return showToast('Please enter a name.', 'error');
-        if (participants.some(p => p.name.toLowerCase() === name.toLowerCase())) {
-            return showToast(`${name} is already added.`, 'error');
+        // --- UI UTILITIES ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const bgClass = type === 'error' ? 'bg-red-500' : type === 'success' ? 'bg-emerald-500' : 'bg-indigo-500';
+            toast.className = `toast ${bgClass} rounded-lg p-4 text-white shadow-lg fade-in flex items-center justify-between`;
+            toast.innerHTML = `<span>${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
         }
 
-        const newPart = { id: generateId(), name: name, upi: upi };
-        participants.push(newPart);
-        
-        DOM.partName.value = '';
-        DOM.partUpi.value = '';
-        
-        updateUI();
-        showToast(`Added ${name}`, 'success');
-    }
-
-    function updateParticipantsUI() {
-        DOM.totalPeople.textContent = participants.length;
-        
-        if (participants.length > 0) {
-            DOM.emptyPartMsg.style.display = 'none';
-            DOM.expenseOverlay.style.display = 'none'; // Unlock expense form
-        } else {
-            DOM.emptyPartMsg.style.display = 'block';
-            DOM.expenseOverlay.style.display = 'flex';
-        }
-
-        // Render chips
-        DOM.partList.innerHTML = participants.map(p => `
-            <li class="bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-sm fade-in">
-                ${p.name}
-                ${p.upi ? `<span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px] font-bold">UPI</span>` : ''}
-            </li>
-        `).join('');
-
-        // Update Payer Dropdown (preserve selection if possible)
-        const currentPayerId = DOM.expPayer.value;
-        DOM.expPayer.innerHTML = '<option value="">Select Payer...</option>' + 
-            participants.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-        if (currentPayerId && participants.find(p => p.id === currentPayerId)) {
-            DOM.expPayer.value = currentPayerId;
-        }
-
-        // Update Split Checkboxes
-        // Only update if not currently editing to prevent overwriting edit state
-        if (!editingExpenseId) {
-            DOM.splitCheckboxes.innerHTML = participants.map(p => `
-                <label class="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 p-2 rounded-lg hover:bg-slate-50 transition">
-                    <input type="checkbox" value="${p.id}" checked class="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500">
-                    <span class="text-sm font-medium text-slate-700 truncate">${p.name}</span>
-                </label>
-            `).join('');
-        }
-    }
-
-    // --- ADD/EDIT EXPENSE ---
-    function saveExpense() {
-        const desc = DOM.expDesc.value.trim() || 'Misc Expense';
-        const amount = parseFloat(DOM.expAmount.value);
-        const payerId = DOM.expPayer.value;
-        
-        // Get checked participant IDs
-        const checkboxes = DOM.splitCheckboxes.querySelectorAll('input[type="checkbox"]:checked');
-        const involvedIds = Array.from(checkboxes).map(cb => cb.value);
-
-        // Validation
-        if (isNaN(amount) || amount <= 0) return showToast('Enter a valid amount > 0.', 'error');
-        if (!payerId) return showToast('Select who paid.', 'error');
-        if (involvedIds.length === 0) return showToast('Select at least one person to split with.', 'error');
-
-        if (editingExpenseId) {
-            // Edit existing
-            const expIndex = expenses.findIndex(e => e.id === editingExpenseId);
-            if (expIndex !== -1) {
-                expenses[expIndex] = { ...expenses[expIndex], desc, amount, payerId, involvedIds };
-                showToast('Expense updated.', 'success');
+        function setLoading(btnId, isLoading) {
+            const btn = document.getElementById(btnId);
+            if (isLoading) {
+                btn.disabled = true;
+                btn.classList.add('opacity-75', 'cursor-not-allowed');
+                btn.dataset.originalText = btn.innerHTML;
+                btn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-3 border-t-2 border-b-2 border-white rounded-full" viewBox="0 0 24 24"></svg> Processing...`;
+            } else {
+                btn.disabled = false;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                if (btn.dataset.originalText) btn.innerHTML = btn.dataset.originalText;
             }
-            cancelEdit();
-        } else {
-            // Add new
-            expenses.push({
-                id: generateId(), desc, amount, payerId, involvedIds, 
-                date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-            });
-            showToast('Expense added.', 'success');
         }
 
-        // Reset inputs
-        DOM.expDesc.value = '';
-        DOM.expAmount.value = '';
-        DOM.expPayer.value = '';
-        // Reset checkboxes to all checked
-        DOM.splitCheckboxes.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
-        
-        updateUI();
-    }
-
-    function editExpense(id) {
-        const exp = expenses.find(e => e.id === id);
-        if (!exp) return;
-
-        editingExpenseId = id;
-        DOM.expFormTitle.textContent = 'Edit Expense';
-        DOM.saveExpBtn.textContent = 'Update Expense';
-        DOM.saveExpBtn.classList.replace('bg-emerald-600', 'bg-amber-500');
-        DOM.saveExpBtn.classList.replace('hover:bg-emerald-700', 'hover:bg-amber-600');
-        DOM.cancelEditBtn.classList.remove('hidden');
-
-        DOM.expDesc.value = exp.desc;
-        DOM.expAmount.value = exp.amount;
-        DOM.expPayer.value = exp.payerId;
-
-        // Populate checkboxes based on involvedIds
-        DOM.splitCheckboxes.innerHTML = participants.map(p => {
-            const isChecked = exp.involvedIds.includes(p.id) ? 'checked' : '';
-            return `
-            <label class="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 p-2 rounded-lg hover:bg-slate-50 transition">
-                <input type="checkbox" value="${p.id}" ${isChecked} class="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500">
-                <span class="text-sm font-medium text-slate-700 truncate">${p.name}</span>
-            </label>`;
-        }).join('');
-        
-        // Scroll to form
-        DOM.expDesc.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-
-    function cancelEdit() {
-        editingExpenseId = null;
-        DOM.expFormTitle.textContent = 'Record Expense';
-        DOM.saveExpBtn.textContent = 'Save Expense';
-        DOM.saveExpBtn.classList.replace('bg-amber-500', 'bg-emerald-600');
-        DOM.saveExpBtn.classList.replace('hover:bg-amber-600', 'hover:bg-emerald-700');
-        DOM.cancelEditBtn.classList.add('hidden');
-        
-        DOM.expDesc.value = '';
-        DOM.expAmount.value = '';
-        DOM.expPayer.value = '';
-        updateParticipantsUI(); // Resets checkboxes to all checked
-    }
-
-    function deleteExpense(id) {
-        expenses = expenses.filter(e => e.id !== id);
-        if (editingExpenseId === id) cancelEdit();
-        updateUI();
-        showToast('Expense deleted.', 'info');
-    }
-
-    function updateExpensesListUI() {
-        DOM.emptyExpMsg.style.display = expenses.length > 0 ? 'none' : 'block';
-        
-        let total = 0;
-        
-        // Sort newest first
-        const sorted = [...expenses].reverse();
-        
-        DOM.expensesList.innerHTML = sorted.map(exp => {
-            total += exp.amount;
-            const payerName = participants.find(p => p.id === exp.payerId)?.name || 'Unknown';
-            const involvedCount = exp.involvedIds.length;
-            
-            return `
-            <li class="py-4 flex justify-between items-center group border-b border-slate-50 last:border-0 fade-in">
-                <div class="flex flex-col">
-                    <span class="font-bold text-slate-800">${exp.desc}</span>
-                    <span class="text-xs text-slate-500 mt-0.5">
-                        <span class="font-semibold text-slate-700">${payerName}</span> paid for ${involvedCount} ${involvedCount === 1 ? 'person' : 'people'} • ${exp.date}
-                    </span>
-                </div>
-                <div class="flex items-center gap-4">
-                    <span class="font-extrabold text-slate-800">₹${exp.amount.toFixed(2)}</span>
-                    <div class="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onclick="editExpense('${exp.id}')" class="text-[10px] uppercase font-bold text-indigo-600 hover:text-indigo-800">Edit</button>
-                        <button onclick="deleteExpense('${exp.id}')" class="text-[10px] uppercase font-bold text-red-500 hover:text-red-700">Del</button>
-                    </div>
-                </div>
-            </li>
-            `;
-        }).join('');
-        
-        DOM.totalSpent.textContent = `₹${total.toFixed(0)}`;
-    }
-
-    // --- SETTLEMENT MATH ALGORITHM ---
-    function updateSettlementsUI() {
-        if (expenses.length === 0) {
-            DOM.settlementsList.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm italic border-2 border-dashed border-slate-100 rounded-xl">Add expenses to see who owes whom.</div>`;
-            return;
-        }
-
-        // 1. Calculate Balances
-        const balances = {};
-        participants.forEach(p => balances[p.id] = 0);
-
-        expenses.forEach(exp => {
-            const splitAmount = exp.amount / exp.involvedIds.length;
-            
-            // Deduct split amount from everyone involved
-            exp.involvedIds.forEach(id => {
-                if (balances[id] !== undefined) balances[id] -= splitAmount;
-            });
-            
-            // Add full amount to payer
-            if (balances[exp.payerId] !== undefined) {
-                balances[exp.payerId] += exp.amount;
-            }
-        });
-
-        // 2. Separate into Debtors and Creditors
-        let debtors = [];
-        let creditors = [];
-
-        participants.forEach(p => {
-            const roundedBalance = Math.round(balances[p.id] * 100) / 100;
-            if (roundedBalance < 0) debtors.push({ ...p, amount: Math.abs(roundedBalance) });
-            else if (roundedBalance > 0) creditors.push({ ...p, amount: roundedBalance });
-        });
-
-        // 3. Match them up (Greedy approach)
-        debtors.sort((a, b) => b.amount - a.amount);
-        creditors.sort((a, b) => b.amount - a.amount);
-
-        const settlements = [];
-        let i = 0, j = 0;
-
-        while (i < debtors.length && j < creditors.length) {
-            let debtor = debtors[i];
-            let creditor = creditors[j];
-            
-            let amount = Math.min(debtor.amount, creditor.amount);
-            
-            if (amount > 0.05) { // Avoid float dust
-                settlements.push({
-                    debtor: debtor,
-                    creditor: creditor,
-                    amount: amount
-                });
-            }
-
-            debtor.amount -= amount;
-            creditor.amount -= amount;
-
-            if (debtor.amount < 0.05) i++;
-            if (creditor.amount < 0.05) j++;
-        }
-
-        // 4. Render output with UPI links
-        if (settlements.length === 0) {
-            DOM.settlementsList.innerHTML = `<div class="bg-emerald-50 text-emerald-700 p-4 rounded-xl text-center font-bold border border-emerald-100 flex items-center justify-center gap-2"><span>🎉</span> All settled up!</div>`;
-            return;
-        }
-
-        DOM.settlementsList.innerHTML = settlements.map(s => {
-            // Generate UPI Link if creditor has a UPI ID
-            let upiButton = '';
-            if (s.creditor.upi) {
-                // Format: upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=INR
-                const upiLink = `upi://pay?pa=${encodeURIComponent(s.creditor.upi)}&pn=${encodeURIComponent(s.creditor.name)}&am=${s.amount.toFixed(2)}&cu=INR`;
-                upiButton = `
-                    <a href="${upiLink}" class="mt-3 flex items-center justify-center gap-1 w-full bg-slate-800 hover:bg-slate-900 text-white py-2 rounded-lg text-xs font-semibold transition shadow-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                        </svg>
-                        Pay ₹${s.amount.toFixed(2)} via UPI
-                    </a>
-                `;
-            }
-
-            return `
-            <div class="p-4 bg-slate-50 rounded-xl border border-slate-100 fade-in flex flex-col">
-                <div class="flex items-center justify-between mb-1">
-                    <div class="flex items-center gap-2">
-                        <span class="font-bold text-red-600">${s.debtor.name}</span>
-                        <span class="text-slate-400 text-xs">owes</span>
-                        <span class="font-bold text-emerald-600">${s.creditor.name}</span>
-                    </div>
-                    <span class="font-extrabold text-slate-800 bg-white border border-slate-200 px-2 py-1 rounded shadow-sm text-sm">₹${s.amount.toFixed(2)}</span>
-                </div>
-                ${upiButton}
-            </div>
-            `;
-        }).join('');
-    }
-
-    // Master update function
-    function updateUI() {
-        updateParticipantsUI();
-        updateExpensesListUI();
-        updateSettlementsUI();
-    }
-
-    // --- BACKEND NOTIFICATION SIMULATION ---
-    async function setupBackendReminders() {
-        const btn = document.getElementById('reminder-btn');
-        const text = document.getElementById('reminder-text');
-        
-        // 1. Request Native Notification Permission
-        try {
-            const permission = await Notification.requestPermission();
-            
-            if (permission !== 'granted') {
-                showToast('Notification permission denied by user.', 'error');
+        // --- INITIALIZATION ---
+        async function init() {
+            if (!isConfigured) {
+                document.getElementById('setup-warning').classList.remove('hidden');
+                document.getElementById('empty-part-msg').textContent = 'App not configured.';
+                document.getElementById('empty-exp-msg').textContent = 'App not configured.';
+                document.getElementById('settlement-list').innerHTML = `<div class="text-center py-6 text-amber-500 italic">Please configure Supabase to view settlements.</div>`;
                 return;
             }
 
-            // 2. Simulate fetching FCM/APNs Device Token
-            text.textContent = 'Generating Token...';
-            btn.classList.add('opacity-75', 'cursor-not-allowed');
-            showToast('Contacting Push servers...', 'info');
-
-            setTimeout(() => {
-                const mockDeviceToken = "device_token_" + Math.random().toString(36).substring(2, 15);
-                console.log("Obtained Push Token:", mockDeviceToken);
-                
-                // 3. Simulate API Call saving token to backend database
-                text.textContent = 'Saving to Server...';
-                
-                setTimeout(() => {
-                    // Simulated POST request payload
-                    const payload = {
-                        userId: "current_user_123",
-                        pushToken: mockDeviceToken,
-                        scheduleTime: ["10:00", "16:00"],
-                        os: "web"
-                    };
-                    console.log("POST /api/notifications/subscribe", payload);
-
-                    // 4. Success State
-                    btn.classList.remove('bg-white', 'text-slate-700', 'border-slate-200', 'hover:bg-slate-50', 'opacity-75', 'cursor-not-allowed');
-                    btn.classList.add('bg-green-100', 'text-green-800', 'border-green-200');
-                    text.textContent = 'Auto-Reminders Active';
-                    btn.onclick = null; // Disable button after activation
-                    
-                    showToast('Backend configured! Server will ping debts at 10AM & 4PM.', 'success');
-                    
-                    // Show a local test notification right now just to prove it works
-                    new Notification("FairShare Setup Complete", {
-                        body: "Your device is registered. We'll handle the awkward reminders for you!",
-                        icon: "https://placehold.co/100x100/4f46e5/ffffff?text=FS" // Mock icon
-                    });
-
-                }, 1500); // 1.5s simulated network delay
-            }, 1000); // 1s simulated token generation delay
-
-        } catch (error) {
-            console.error("Notification Error:", error);
-            showToast('Failed to setup notifications. Ensure you are on HTTPS.', 'error');
+            try {
+                // Initialize Supabase Client
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                await fetchData();
+            } catch (err) {
+                console.error("Initialization error:", err);
+                showToast("Failed to connect to database.", "error");
+            }
         }
-    }
 
-    // Initialize UI on load
-    updateUI();
+        async function fetchData() {
+            try {
+                // Fetch Participants
+                const { data: parts, error: partsErr } = await supabaseClient
+                    .from('participants')
+                    .select('*')
+                    .order('created_at', { ascending: true });
+                
+                if (partsErr) throw partsErr;
+                state.participants = parts || [];
 
-</script>
+                // Fetch Expenses
+                const { data: exps, error: expsErr } = await supabaseClient
+                    .from('expenses')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (expsErr) throw expsErr;
+                state.expenses = exps || [];
+
+                renderAll();
+            } catch (err) {
+                console.error("Fetch error:", err);
+                showToast("Error loading data. Check table schema.", "error");
+            }
+        }
+
+        // --- ACTIONS ---
+        async function handleAddParticipant() {
+            if (!isConfigured) return showToast("Supabase not configured.", "error");
+            
+            const name = document.getElementById('part-name').value.trim();
+            const upi = document.getElementById('part-upi').value.trim();
+
+            if (!name) return showToast("Name is required.", "error");
+
+            setLoading('btn-add-part', true);
+            try {
+                const { data, error } = await supabaseClient
+                    .from('participants')
+                    .insert([{ name: name, upi_id: upi }])
+                    .select();
+
+                if (error) throw error;
+                
+                state.participants.push(data[0]);
+                
+                document.getElementById('part-name').value = '';
+                document.getElementById('part-upi').value = '';
+                showToast("Participant added!", "success");
+                
+                renderAll();
+            } catch (err) {
+                console.error(err);
+                showToast("Failed to add participant.", "error");
+            } finally {
+                setLoading('btn-add-part', false);
+            }
+        }
+
+        async function handleAddExpense() {
+            if (!isConfigured) return showToast("Supabase not configured.", "error");
+
+            const desc = document.getElementById('exp-desc').value.trim();
+            const amount = parseFloat(document.getElementById('exp-amount').value);
+            const payerId = document.getElementById('exp-payer').value;
+
+            if (!desc) return showToast("Description is required.", "error");
+            if (isNaN(amount) || amount <= 0) return showToast("Valid amount is required.", "error");
+            if (!payerId) return showToast("Please select who paid.", "error");
+            if (state.participants.length === 0) return showToast("Add participants first.", "error");
+
+            setLoading('btn-add-exp', true);
+            try {
+                const { data, error } = await supabaseClient
+                    .from('expenses')
+                    .insert([{ description: desc, amount: amount, payer_id: payerId }])
+                    .select();
+
+                if (error) throw error;
+
+                state.expenses.unshift(data[0]); // Add to beginning of list locally
+                
+                document.getElementById('exp-desc').value = '';
+                document.getElementById('exp-amount').value = '';
+                document.getElementById('exp-payer').value = '';
+                showToast("Expense recorded!", "success");
+                
+                renderAll();
+            } catch (err) {
+                console.error(err);
+                showToast("Failed to record expense.", "error");
+            } finally {
+                setLoading('btn-add-exp', false);
+            }
+        }
+
+        // --- RENDERING ---
+        function renderAll() {
+            renderParticipants();
+            renderExpenses();
+            calculateAndRenderSettlements();
+        }
+
+        function renderParticipants() {
+            const list = document.getElementById('participants-list');
+            const select = document.getElementById('exp-payer');
+            document.getElementById('total-group').textContent = state.participants.length;
+
+            if (state.participants.length === 0) {
+                list.innerHTML = `<li class="text-slate-400 italic" id="empty-part-msg">No participants added yet.</li>`;
+                select.innerHTML = '<option value="">Who paid?</option>';
+                return;
+            }
+
+            // Render tags
+            list.innerHTML = state.participants.map(p => 
+                `<li class="bg-indigo-100 text-indigo-800 px-3 py-1.5 rounded-full font-medium flex flex-col text-xs fade-in border border-indigo-200">
+                    <span class="text-sm">${p.name}</span>
+                    ${p.upi_id ? `<span class="text-indigo-500 font-normal text-[10px]">${p.upi_id}</span>` : ''}
+                </li>`
+            ).join('');
+
+            // Render select dropdown
+            const currentSelected = select.value;
+            select.innerHTML = '<option value="">Who paid?</option>' + 
+                state.participants.map(p => 
+                    `<option value="${p.id}" ${p.id === currentSelected ? 'selected' : ''}>${p.name}</option>`
+                ).join('');
+        }
+
+        function renderExpenses() {
+            const list = document.getElementById('expenses-list');
+            
+            let total = 0;
+            state.expenses.forEach(e => total += Number(e.amount));
+            document.getElementById('total-spent').textContent = `₹${total.toFixed(2)}`;
+
+            if (state.expenses.length === 0) {
+                list.innerHTML = `<li class="py-4 text-center text-slate-400 italic">No expenses recorded yet.</li>`;
+                return;
+            }
+
+            list.innerHTML = state.expenses.map(exp => {
+                const payer = state.participants.find(p => p.id === exp.payer_id);
+                const payerName = payer ? payer.name : 'Unknown';
+                const dateStr = exp.created_at ? new Date(exp.created_at).toLocaleDateString() : 'Just now';
+                
+                return `
+                <li class="py-3 flex justify-between items-center fade-in">
+                    <div class="flex flex-col">
+                        <span class="font-semibold text-slate-800">${exp.description}</span>
+                        <span class="text-xs text-slate-500">Paid by <span class="font-medium text-slate-700">${payerName}</span> on ${dateStr}</span>
+                    </div>
+                    <div class="font-bold text-slate-800">
+                        ₹${Number(exp.amount).toFixed(2)}
+                    </div>
+                </li>`;
+            }).join('');
+        }
+
+        // --- CORE LOGIC: SETTLEMENTS ---
+        function calculateAndRenderSettlements() {
+            const container = document.getElementById('settlement-list');
+
+            if (state.participants.length === 0 || state.expenses.length === 0) {
+                container.innerHTML = `<div class="text-center py-6 text-slate-400 italic">Add participants and expenses to see who owes whom.</div>`;
+                return;
+            }
+
+            // 1. Calculate Balances
+            const balances = {};
+            state.participants.forEach(p => balances[p.id] = 0);
+
+            state.expenses.forEach(exp => {
+                const amount = Number(exp.amount);
+                // Payer gets positive balance (owed money)
+                if (balances[exp.payer_id] !== undefined) {
+                    balances[exp.payer_id] += amount;
+                }
+                
+                // Everyone splits equally (negative balance)
+                const splitAmount = amount / state.participants.length;
+                state.participants.forEach(p => {
+                    balances[p.id] -= splitAmount;
+                });
+            });
+
+            // 2. Separate Debtors and Creditors
+            let debtors = [];
+            let creditors = [];
+
+            for (const [id, balance] of Object.entries(balances)) {
+                const roundedBalance = Math.round(balance * 100) / 100;
+                if (roundedBalance < 0) {
+                    debtors.push({ id, amount: Math.abs(roundedBalance) });
+                } else if (roundedBalance > 0) {
+                    creditors.push({ id, amount: roundedBalance });
+                }
+            }
+
+            // Sort largest to smallest for greedy settlement
+            debtors.sort((a, b) => b.amount - a.amount);
+            creditors.sort((a, b) => b.amount - a.amount);
+
+            // 3. Match them up
+            const settlements = [];
+            let i = 0; let j = 0;
+
+            while (i < debtors.length && j < creditors.length) {
+                let d = debtors[i];
+                let c = creditors[j];
+                
+                let settledAmount = Math.min(d.amount, c.amount);
+                
+                if (settledAmount > 0.01) {
+                    settlements.push({
+                        from: state.participants.find(p => p.id === d.id),
+                        to: state.participants.find(p => p.id === c.id),
+                        amount: settledAmount
+                    });
+                }
+
+                d.amount -= settledAmount;
+                c.amount -= settledAmount;
+
+                if (d.amount < 0.01) i++;
+                if (c.amount < 0.01) j++;
+            }
+
+            // 4. Render UI
+            if (settlements.length === 0) {
+                container.innerHTML = `<div class="text-center py-6 text-emerald-600 bg-emerald-50 rounded-lg font-medium border border-emerald-100">All settled up! No one owes anything.</div>`;
+                return;
+            }
+
+            container.innerHTML = settlements.map(s => {
+                // Generate UPI link if payee has a UPI ID
+                let upiButton = '';
+                if (s.to.upi_id) {
+                    const upiUrl = `upi://pay?pa=${encodeURIComponent(s.to.upi_id)}&pn=${encodeURIComponent(s.to.name)}&am=${s.amount.toFixed(2)}&cu=INR`;
+                    upiButton = `
+                        <a href="${upiUrl}" class="ml-auto bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-2 rounded-md font-medium transition shadow-sm flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            Pay UPI
+                        </a>`;
+                }
+
+                return `
+                <div class="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200 fade-in flex-wrap gap-2">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-bold text-sm shadow-inner">
+                            ${s.from.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="font-medium text-slate-700">
+                            ${s.from.name} 
+                            <span class="text-slate-400 font-normal mx-1 text-sm">owes</span> 
+                            ${s.to.name}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 w-full sm:w-auto mt-2 sm:mt-0 justify-end flex-1">
+                        <div class="font-bold text-indigo-700 bg-indigo-100 px-3 py-1 rounded-md shadow-sm border border-indigo-200">
+                            ₹${s.amount.toFixed(2)}
+                        </div>
+                        ${upiButton}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // Initialize App
+        window.addEventListener('DOMContentLoaded', init);
+
+    </script>
 </body>
 </html>
