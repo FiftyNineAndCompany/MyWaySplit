@@ -147,7 +147,7 @@
                     <div class="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
                         <h2 class="text-xl font-semibold text-slate-700" id="settlement-title">3. Settlement Plan</h2>
                         <button onclick="handleArchiveExpenses()" id="btn-archive" class="text-xs bg-rose-50 text-rose-600 hover:bg-rose-100 px-3 py-1.5 rounded border border-rose-200 font-medium transition hide-on-history hidden">
-                            Start Fresh / Settle Up All
+                            Archive & Start Fresh Sheet
                         </button>
                     </div>
                     <div id="settlement-list" class="space-y-3">
@@ -180,11 +180,52 @@
             expenses: [],
             viewMode: 'active', // 'active' or 'history'
             currentUser: null,  // The participant ID looking at the screen
-            currentUserDebt: 0
         };
 
         // --- AUDIO / NOTIFICATION SYSTEM ---
         let lastReminderKey = '';
+
+        function calculateGlobalDebt() {
+            if (!state.currentUser || state.participants.length === 0) return 0;
+            
+            // Calculate balances across ALL expenses (active and archived)
+            const balances = {};
+            state.participants.forEach(p => balances[p.id] = 0);
+
+            state.expenses.forEach(exp => {
+                const amount = Number(exp.amount);
+                if (balances[exp.paid_by] !== undefined) balances[exp.paid_by] += amount;
+                const splitAmount = amount / state.participants.length;
+                state.participants.forEach(p => balances[p.id] -= splitAmount);
+            });
+
+            // Find debtors and creditors
+            let debtors = []; let creditors = [];
+            for (const [id, balance] of Object.entries(balances)) {
+                const rounded = Math.round(balance * 100) / 100;
+                if (rounded < 0) debtors.push({ id, amount: Math.abs(rounded) });
+                else if (rounded > 0) creditors.push({ id, amount: rounded });
+            }
+
+            debtors.sort((a, b) => b.amount - a.amount);
+            creditors.sort((a, b) => b.amount - a.amount);
+
+            // Calculate exact owed amount for the current user globally
+            let totalOwed = 0;
+            let i = 0; let j = 0;
+            while (i < debtors.length && j < creditors.length) {
+                let d = debtors[i]; let c = creditors[j];
+                let settledAmount = Math.min(d.amount, c.amount);
+                
+                if (settledAmount > 0.01 && d.id === state.currentUser) {
+                    totalOwed += settledAmount;
+                }
+                d.amount -= settledAmount; c.amount -= settledAmount;
+                if (d.amount < 0.01) i++;
+                if (c.amount < 0.01) j++;
+            }
+            return totalOwed;
+        }
 
         function playBeep() {
             try {
@@ -205,7 +246,8 @@
         function triggerReminderLoop() {
             // Checks the clock every 10 seconds.
             setInterval(() => {
-                if (!state.currentUser || state.currentUserDebt <= 0) return;
+                const globalDebt = calculateGlobalDebt();
+                if (!state.currentUser || globalDebt <= 0) return;
 
                 const now = new Date();
                 const hour = now.getHours();
@@ -221,7 +263,7 @@
                         // Show OS Notification if granted
                         if (Notification.permission === 'granted') {
                             new Notification("FairShare Reminder 💰", {
-                                body: `Hey! You still owe ₹${state.currentUserDebt.toFixed(2)}. Please settle up!`,
+                                body: `Hey! You still owe a total of ₹${globalDebt.toFixed(2)}. Please check past & active settlements!`,
                                 icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
                             });
                         } else {
@@ -456,8 +498,9 @@
 
         async function handleArchiveExpenses() {
             const activeExps = state.expenses.filter(e => e.is_archived === false);
-            if (activeExps.length === 0) return showToast("No active expenses to settle.");
-            if (!confirm("Are you sure you want to mark all current balances as settled? This will move them to History and start a fresh slate.")) return;
+            if (activeExps.length === 0) return showToast("No active expenses to archive.");
+            
+            if (!confirm("Are you sure you want to archive the current expenses and start a fresh sheet? Any unpaid debts will be moved to 'Past Settlements'.")) return;
             
             const ids = activeExps.map(e => e.id);
             try {
@@ -549,9 +592,14 @@
             const container = document.getElementById('settlement-list');
             const archiveBtn = document.getElementById('btn-archive');
             
-            // Reset debt tracker
-            state.currentUserDebt = 0;
-            document.getElementById('debtor-banner').classList.add('hidden');
+            // Check Global Debt instead of just local tab debt
+            const globalDebt = calculateGlobalDebt();
+            if (globalDebt > 0) {
+                document.getElementById('debtor-banner').classList.remove('hidden');
+                document.getElementById('debtor-text').textContent = `You have a total pending debt of ₹${globalDebt.toFixed(2)}. Check active and past settlements!`;
+            } else {
+                document.getElementById('debtor-banner').classList.add('hidden');
+            }
 
             if (state.participants.length === 0 || visibleExpenses.length === 0) {
                 container.innerHTML = `<div class="text-center py-6 text-slate-400 italic">No expenses to settle here.</div>`;
@@ -592,21 +640,10 @@
                         to: state.participants.find(p => p.id === c.id),
                         amount: settledAmount
                     });
-                    
-                    // Track global debt for the current viewing user
-                    if (state.currentUser === d.id && state.viewMode === 'active') {
-                        state.currentUserDebt += settledAmount;
-                    }
                 }
                 d.amount -= settledAmount; c.amount -= settledAmount;
                 if (d.amount < 0.01) i++;
                 if (c.amount < 0.01) j++;
-            }
-
-            // Show Debtor Banner if they owe money
-            if (state.currentUserDebt > 0) {
-                document.getElementById('debtor-banner').classList.remove('hidden');
-                document.getElementById('debtor-text').textContent = `You owe a total of ₹${state.currentUserDebt.toFixed(2)}. Please settle up!`;
             }
 
             if (settlements.length === 0) {
