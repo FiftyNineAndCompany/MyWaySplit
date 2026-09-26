@@ -101,10 +101,10 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
                     Start New Sheet
                 </button>
-                <div id="current-user-badge" class="hidden bg-white border border-indigo-100 text-indigo-700 px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 shadow-sm">
-                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span id="current-user-name" class="font-bold"></span>
-                </div>
+                <button onclick="openIdentityModal()" id="current-user-badge" class="bg-white border border-indigo-100 text-indigo-700 px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 shadow-sm transition hover:bg-indigo-50 cursor-pointer">
+                    <span id="badge-dot" class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
+                    <span id="current-user-name" class="font-bold">Guest (Click to identify)</span>
+                </button>
             </div>
         </header>
 
@@ -368,22 +368,35 @@ ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
             ).join('');
         }
 
+        function openIdentityModal() {
+            populateIdentityModal();
+            document.getElementById('identity-modal').classList.remove('hidden');
+        }
+
         function setIdentity(id, fromStorage = false) {
             document.getElementById('identity-modal').classList.add('hidden');
+            
+            const badgeDot = document.getElementById('badge-dot');
+            const nameSpan = document.getElementById('current-user-name');
             
             if (id) {
                 const user = state.participants.find(p => p.id === id);
                 if (user) {
                     state.currentUser = id;
                     localStorage.setItem('fairshare_user', id);
-                    document.getElementById('current-user-badge').classList.remove('hidden');
-                    document.getElementById('current-user-name').textContent = user.name;
+                    badgeDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
+                    nameSpan.textContent = "Viewing as: " + user.name;
                     
                     if (!fromStorage && "Notification" in window) {
                         Notification.requestPermission();
                         registerPushToken(id);
                     }
                 }
+            } else {
+                state.currentUser = null;
+                localStorage.removeItem('fairshare_user');
+                badgeDot.className = "w-2.5 h-2.5 rounded-full bg-slate-300";
+                nameSpan.textContent = "Guest (Click to identify)";
             }
             renderAll();
         }
@@ -574,11 +587,24 @@ ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
             if (!confirm("Start a new sheet? This moves all current expenses to History. Your debts remain active until paid.")) return;
             
             const ids = activeExps.map(e => e.id);
+            const activeParticipantIds = state.participants.filter(p => !p.is_archived).map(p => p.id);
+            
             try {
-                const { error } = await supabaseClient.from('expenses').update({ is_archived: true }).in('id', ids);
+                // We freeze the exact participant list into history so adding/removing later doesn't break old math!
+                const { error } = await supabaseClient.from('expenses').update({ 
+                    is_archived: true, 
+                    involved_ids: activeParticipantIds 
+                }).in('id', ids);
+                
                 if (error) throw error;
                 
-                state.expenses.forEach(e => { if (ids.includes(e.id)) e.is_archived = true; });
+                state.expenses.forEach(e => { 
+                    if (ids.includes(e.id)) {
+                        e.is_archived = true; 
+                        e.involved_ids = activeParticipantIds;
+                    } 
+                });
+                
                 showToast("New sheet started! Old items moved to History.", "success");
                 setViewMode('active'); 
             } catch (err) { showToast("Failed to start new sheet.", "error"); }
@@ -590,18 +616,29 @@ ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
             // Initialize for ALL participants globally
             state.participants.forEach(p => balances[p.id] = 0);
             
+            const activeParticipantIds = state.participants.filter(p => !p.is_archived).map(p => p.id);
+            
             expenses.forEach(exp => {
                 const amount = Number(exp.amount);
                 if (balances[exp.paid_by] !== undefined) balances[exp.paid_by] += amount;
                 
-                // Historical Math Protection: Use saved involved_ids, OR fallback to all participants
-                let involved = exp.involved_ids; 
-                if (!involved || involved.length === 0) involved = state.participants.map(p => p.id);
+                let involved = [];
                 
-                const splitAmount = amount / involved.length;
-                involved.forEach(id => {
-                    if (balances[id] !== undefined) balances[id] -= splitAmount;
-                });
+                if (!exp.is_archived) {
+                    // ACTIVE SHEET: Always dynamically recalculate based on the current group!
+                    involved = activeParticipantIds;
+                } else {
+                    // HISTORY SHEET: Use the frozen snapshot taken when they clicked "Start New Sheet"
+                    involved = exp.involved_ids; 
+                    if (!involved || involved.length === 0) involved = activeParticipantIds;
+                }
+                
+                if (involved.length > 0) {
+                    const splitAmount = amount / involved.length;
+                    involved.forEach(id => {
+                        if (balances[id] !== undefined) balances[id] -= splitAmount;
+                    });
+                }
             });
             return balances;
         }
