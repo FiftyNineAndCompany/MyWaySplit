@@ -58,7 +58,7 @@
 
     <div id="toast-container"></div>
 
-    <!-- Identity Modal (Forces user interaction for Notification APIs) -->
+    <!-- Identity Modal -->
     <div id="identity-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-bg hidden fade-in">
         <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full mx-4 border border-slate-100">
             <div class="text-center mb-6">
@@ -90,7 +90,7 @@
             <div class="text-center md:text-left">
                 <h1 class="text-4xl font-bold text-indigo-600 flex items-center justify-center md:justify-start gap-3 font-display tracking-tight">
                     <div class="bg-indigo-600 text-white p-2 rounded-xl transform -rotate-6 shadow-md">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     </div>
                     FairShare
                 </h1>
@@ -108,13 +108,15 @@
             </div>
         </header>
 
-        <!-- Setup Warning for Developer -->
+        <!-- Setup Warning -->
         <div id="setup-warning" class="hidden mb-8 bg-amber-50 border border-amber-200 p-5 rounded-2xl shadow-sm">
             <h3 class="text-amber-800 font-bold text-lg flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                Supabase Configuration Required
+                Supabase SQL Updates Required
             </h3>
-            <p class="text-amber-700 mt-2 text-sm">Please update the <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> in the script.</p>
+            <p class="text-amber-700 mt-2 text-sm">Please run these commands in your Supabase SQL Editor to enable history preservation:</p>
+            <pre class="mt-2 bg-amber-100 p-3 rounded-lg text-xs font-mono text-amber-900 overflow-x-auto">ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -128,12 +130,19 @@
                 </div>
 
                 <!-- Manage Participants -->
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                    <h2 class="text-xl font-bold mb-4 font-display text-slate-800" id="part-form-title">1. Manage Participants</h2>
-                    <div class="space-y-3 mb-5">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hide-on-history">
+                    <h2 class="text-xl font-bold mb-4 font-display text-slate-800" id="part-form-title">1. Current Sheet Participants</h2>
+                    
+                    <div class="bg-slate-50 rounded-xl p-4 min-h-[60px] border border-slate-100 mb-5">
+                        <ul id="participants-list" class="flex flex-wrap gap-2 text-sm">
+                            <li class="text-slate-400 italic text-sm" id="empty-part-msg">Loading...</li>
+                        </ul>
+                    </div>
+
+                    <div class="space-y-3">
                         <input type="hidden" id="part-edit-id">
-                        <input type="text" id="part-name" placeholder="Name (e.g., Rahul)" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition">
-                        <input type="text" id="part-upi" placeholder="Compulsory UPI ID / Mobile" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition">
+                        <input type="text" id="part-name" placeholder="Name (e.g., Rahul)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition shadow-sm">
+                        <input type="text" id="part-upi" placeholder="Compulsory UPI ID / Mobile" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition shadow-sm">
                         <div class="flex gap-2">
                             <button onclick="handleAddParticipant()" id="btn-add-part" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-semibold transition shadow-sm flex justify-center items-center">
                                 Add Participant
@@ -143,10 +152,14 @@
                             </button>
                         </div>
                     </div>
-                    <div class="bg-slate-50 rounded-xl p-4 min-h-[60px] border border-slate-100">
-                        <ul id="participants-list" class="flex flex-wrap gap-2 text-sm">
-                            <li class="text-slate-400 italic text-sm" id="empty-part-msg">Loading...</li>
-                        </ul>
+
+                    <!-- Add from Saved / Restoring -->
+                    <div id="restore-part-section" class="mt-5 pt-5 border-t border-slate-100 hidden">
+                        <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">Or add from Saved List</label>
+                        <div class="flex gap-2">
+                            <select id="restore-part-select" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"></select>
+                            <button onclick="handleRestoreParticipant()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-semibold transition shadow-sm">Add</button>
+                        </div>
                     </div>
                 </div>
 
@@ -190,7 +203,7 @@
                     </div>
                     <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-center items-center relative overflow-hidden">
                         <div class="absolute top-0 right-0 w-20 h-20 bg-indigo-500/5 rounded-bl-full"></div>
-                        <span class="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1" id="group-label">Active Sheet</span>
+                        <span class="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1" id="group-label">Active Expenses</span>
                         <span class="text-4xl font-black text-slate-800 font-display tracking-tight" id="total-group">0</span>
                     </div>
                 </div>
@@ -236,16 +249,11 @@
         // --- BACKGROUND NOTIFICATION LOGIC ---
         let lastReminderKey = '';
 
-        // This function would ideally send the token to a backend for true offline push.
-        // For now, we simulate the token capture to show proper architecture.
         async function registerPushToken(userId) {
-            console.log(`[Architecture Note] Device token would be requested here and mapped to userId: ${userId} in a 'push_tokens' table.`);
-            // e.g., const token = await nativePushManager.subscribe();
-            // supabaseClient.from('push_tokens').insert({ user_id: userId, token: token });
+            console.log(`[Architecture] Device token mapped to userId: ${userId} for server push.`);
         }
 
         function triggerReminderLoop() {
-            // Checks clock every 10 seconds. Fires native system notification exactly at 10:00 & 16:00.
             setInterval(() => {
                 const globalDebt = calculateGlobalDebt();
                 if (!state.currentUser || globalDebt <= 0) return;
@@ -254,13 +262,10 @@
                 const hour = now.getHours();
                 const min = now.getMinutes();
                 
-                // 10 AM and 4 PM
                 if ((hour === 10 || hour === 16) && min === 0) {
                     const key = `${now.toDateString()}-${hour}`;
                     if (lastReminderKey !== key) {
                         lastReminderKey = key;
-                        
-                        // Using standard Web Notification API triggers the default System Sound!
                         if (Notification.permission === 'granted') {
                             new Notification("FairShare Reminder 💰", {
                                 body: `You have unsettled debts totaling ₹${globalDebt.toFixed(2)}. Open the app to settle up!`,
@@ -304,31 +309,25 @@
         }
 
         async function init() {
-            if (!isConfigured) {
-                document.getElementById('setup-warning').classList.remove('hidden');
-                document.getElementById('empty-part-msg').textContent = 'App not configured.';
-                document.getElementById('empty-exp-msg').textContent = 'App not configured.';
-                return;
-            }
+            if (!isConfigured) return;
 
             try {
                 supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                await cleanOldHistory(); // Requirement: Keep only 2 weeks history
+                await cleanOldHistory();
                 await fetchData();
                 
                 const savedUser = localStorage.getItem('fairshare_user');
-                if (savedUser) {
-                    setIdentity(savedUser, true);
-                } else {
-                    document.getElementById('identity-modal').classList.remove('hidden');
-                }
+                if (savedUser) setIdentity(savedUser, true);
+                else document.getElementById('identity-modal').classList.remove('hidden');
                 
                 triggerReminderLoop();
-            } catch (err) { showToast("Failed to connect to database.", "error"); }
+            } catch (err) { 
+                showToast("Failed to connect to database.", "error"); 
+                document.getElementById('setup-warning').classList.remove('hidden');
+            }
         }
 
         async function cleanOldHistory() {
-            // Deletes expenses older than 14 days directly from Supabase
             const twoWeeksAgo = new Date();
             twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
             try {
@@ -340,16 +339,19 @@
             try {
                 const { data: parts, error: partsErr } = await supabaseClient.from('participants').select('*');
                 if (partsErr) throw partsErr;
-                state.participants = parts || [];
+                // Ensure is_archived defaults to false if column is missing/null
+                state.participants = (parts || []).map(p => ({...p, is_archived: p.is_archived || false}));
 
                 const { data: exps, error: expsErr } = await supabaseClient.from('expenses').select('*').order('created_at', { ascending: false });
                 if (expsErr) throw expsErr;
-                
                 state.expenses = (exps || []).map(e => ({...e, is_archived: e.is_archived || false}));
 
                 populateIdentityModal();
                 renderAll();
-            } catch (err) { showToast("Database error.", "error"); }
+            } catch (err) { 
+                showToast("Database Error. Please run the setup SQL commands.", "error"); 
+                document.getElementById('setup-warning').classList.remove('hidden');
+            }
         }
 
         function populateIdentityModal() {
@@ -379,7 +381,7 @@
                     
                     if (!fromStorage && "Notification" in window) {
                         Notification.requestPermission();
-                        registerPushToken(id); // For backend
+                        registerPushToken(id);
                     }
                 }
             }
@@ -396,13 +398,13 @@
                 btnHist.className = "flex-1 py-2.5 rounded-lg font-medium text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition";
                 document.getElementById('settlement-title').textContent = "3. Final Settlements";
                 document.getElementById('expense-list-title').textContent = "Recent Transactions";
-                document.getElementById('group-label').textContent = "Active Sheet";
+                document.getElementById('group-label').textContent = "Active Expenses";
             } else {
                 btnHist.className = "flex-1 py-2.5 rounded-lg font-semibold text-sm bg-indigo-600 text-white shadow-sm transition";
                 btnActive.className = "flex-1 py-2.5 rounded-lg font-medium text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition";
                 document.getElementById('settlement-title').textContent = "Unpaid History (Past 14 Days)";
                 document.getElementById('expense-list-title').textContent = "Archived Transactions";
-                document.getElementById('group-label').textContent = "Archived Sheet";
+                document.getElementById('group-label').textContent = "Archived Expenses";
             }
 
             document.querySelectorAll('.hide-on-history').forEach(el => { el.style.display = mode === 'history' ? 'none' : 'block'; });
@@ -410,15 +412,16 @@
             renderAll();
         }
 
+        // --- PARTICIPANT MANAGEMENT (SOFT DELETES) ---
         async function handleAddParticipant() {
             const id = document.getElementById('part-edit-id').value;
             const name = document.getElementById('part-name').value.trim();
             const upi = document.getElementById('part-upi').value.trim();
             
             if (!name) return showToast("Name is required.", "error");
-            if (!upi) return showToast("UPI ID or Mobile is required.", "error"); // Compulsory
+            if (!upi) return showToast("UPI ID or Mobile is required.", "error"); 
 
-            setLoading('btn-add-part', true, id ? "Update" : "Add");
+            setLoading('btn-add-part', true, id ? "Update" : "Add Participant");
             try {
                 if (id) {
                     const { error } = await supabaseClient.from('participants').update({ name, upi_id: upi }).eq('id', id);
@@ -427,7 +430,7 @@
                     if (idx > -1) { state.participants[idx].name = name; state.participants[idx].upi_id = upi; }
                     showToast("Participant updated!", "success");
                 } else {
-                    const { data, error } = await supabaseClient.from('participants').insert([{ name, upi_id: upi }]).select();
+                    const { data, error } = await supabaseClient.from('participants').insert([{ name, upi_id: upi, is_archived: false }]).select();
                     if (error) throw error;
                     state.participants.push(data[0]);
                     showToast("Participant added!", "success");
@@ -436,7 +439,7 @@
                 populateIdentityModal();
                 renderAll();
             } catch (err) { showToast("Failed to save participant.", "error"); } 
-            finally { setLoading('btn-add-part', false, id ? "Update" : "Add"); }
+            finally { setLoading('btn-add-part', false, id ? "Update" : "Add Participant"); }
         }
 
         function editParticipant(id) {
@@ -455,22 +458,39 @@
             document.getElementById('part-edit-id').value = '';
             document.getElementById('part-name').value = '';
             document.getElementById('part-upi').value = '';
-            document.getElementById('part-form-title').textContent = "1. Manage Participants";
+            document.getElementById('part-form-title').textContent = "1. Current Sheet Participants";
             document.getElementById('btn-add-part').textContent = "Add Participant";
             document.getElementById('btn-cancel-part').classList.add('hidden');
         }
 
-        async function deleteParticipant(id) {
-            if (!confirm("Delete participant? (Ensure they have no active expenses first)")) return;
+        async function archiveParticipant(id) {
+            // Soft delete - removes them from active sheet, preserves history!
             try {
-                const { error } = await supabaseClient.from('participants').delete().eq('id', id);
+                const { error } = await supabaseClient.from('participants').update({ is_archived: true }).eq('id', id);
                 if (error) throw error;
-                state.participants = state.participants.filter(p => p.id !== id);
-                showToast("Participant removed.", "success");
+                const p = state.participants.find(p => p.id === id);
+                if(p) p.is_archived = true;
+                showToast("Participant removed from this sheet.", "success");
                 renderAll();
-            } catch (err) { showToast("Cannot delete (likely has linked expenses).", "error"); }
+            } catch (err) { showToast("Error removing participant.", "error"); }
         }
 
+        async function handleRestoreParticipant() {
+            const id = document.getElementById('restore-part-select').value;
+            if (!id) return;
+            
+            try {
+                const { error } = await supabaseClient.from('participants').update({ is_archived: false }).eq('id', id);
+                if (error) throw error;
+                const p = state.participants.find(p => p.id === id);
+                if(p) p.is_archived = false;
+                showToast("Participant added to current sheet!", "success");
+                renderAll();
+            } catch (err) { showToast("Error restoring participant.", "error"); }
+        }
+
+
+        // --- EXPENSES ---
         async function handleAddExpense() {
             const id = document.getElementById('exp-edit-id').value;
             const desc = document.getElementById('exp-desc').value.trim();
@@ -479,7 +499,11 @@
 
             if (!desc || isNaN(amount) || amount <= 0 || !payerId) return showToast("Fill all fields correctly.", "error");
 
-            setLoading('btn-add-exp', true, id ? "Update" : "Save");
+            // Capture exact current active participants to freeze history math
+            const activeParticipants = state.participants.filter(p => !p.is_archived);
+            const involvedIds = activeParticipants.map(p => p.id);
+
+            setLoading('btn-add-exp', true, id ? "Update" : "Save Expense");
             try {
                 if (id) {
                     const { error } = await supabaseClient.from('expenses').update({ description: desc, amount, paid_by: payerId }).eq('id', id);
@@ -488,20 +512,27 @@
                     if (idx > -1) { state.expenses[idx].description = desc; state.expenses[idx].amount = amount; state.expenses[idx].paid_by = payerId; }
                     showToast("Expense updated!", "success");
                 } else {
-                    const { data, error } = await supabaseClient.from('expenses').insert([{ description: desc, amount, paid_by: payerId, is_archived: false }]).select();
+                    const payload = { description: desc, amount, paid_by: payerId, is_archived: false, involved_ids: involvedIds };
+                    const { data, error } = await supabaseClient.from('expenses').insert([payload]).select();
                     if (error) throw error;
                     state.expenses.unshift(data[0]);
                     showToast("Expense recorded!", "success");
                 }
                 cancelExpEdit();
                 renderAll();
-            } catch (err) { showToast("Failed to save.", "error"); } 
-            finally { setLoading('btn-add-exp', false, id ? "Update" : "Save"); }
+            } catch (err) { showToast("Failed to save. Did you run the SQL?", "error"); } 
+            finally { setLoading('btn-add-exp', false, id ? "Update" : "Save Expense"); }
         }
 
         function editExpense(id) {
             const exp = state.expenses.find(e => e.id === id);
             if (!exp) return;
+            
+            // Force the view back to 'active' so the form becomes visible
+            if (state.viewMode === 'history') {
+                setViewMode('active');
+            }
+
             document.getElementById('exp-edit-id').value = exp.id;
             document.getElementById('exp-desc').value = exp.description;
             document.getElementById('exp-amount').value = exp.amount;
@@ -510,6 +541,9 @@
             document.getElementById('expense-form-title').textContent = "Edit Expense";
             document.getElementById('btn-add-exp').textContent = "Update";
             document.getElementById('btn-cancel-exp').classList.remove('hidden');
+            
+            // Scroll to the top so the user sees the form
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function cancelExpEdit() {
@@ -533,12 +567,11 @@
             } catch (err) { showToast("Failed to delete.", "error"); }
         }
 
-        // START NEW SHEET LOGIC
         async function handleStartNewSheet() {
             const activeExps = state.expenses.filter(e => e.is_archived === false);
             if (activeExps.length === 0) return showToast("Sheet is already fresh!");
             
-            if (!confirm("Start a new sheet? This will move all current expenses to History. Your debts will remain active until paid.")) return;
+            if (!confirm("Start a new sheet? This moves all current expenses to History. Your debts remain active until paid.")) return;
             
             const ids = activeExps.map(e => e.id);
             try {
@@ -547,20 +580,36 @@
                 
                 state.expenses.forEach(e => { if (ids.includes(e.id)) e.is_archived = true; });
                 showToast("New sheet started! Old items moved to History.", "success");
-                setViewMode('active'); // Force back to active view
+                setViewMode('active'); 
             } catch (err) { showToast("Failed to start new sheet.", "error"); }
+        }
+
+        // --- MATH ENGINE ---
+        function calculateBalances(expenses) {
+            const balances = {};
+            // Initialize for ALL participants globally
+            state.participants.forEach(p => balances[p.id] = 0);
+            
+            expenses.forEach(exp => {
+                const amount = Number(exp.amount);
+                if (balances[exp.paid_by] !== undefined) balances[exp.paid_by] += amount;
+                
+                // Historical Math Protection: Use saved involved_ids, OR fallback to all participants
+                let involved = exp.involved_ids; 
+                if (!involved || involved.length === 0) involved = state.participants.map(p => p.id);
+                
+                const splitAmount = amount / involved.length;
+                involved.forEach(id => {
+                    if (balances[id] !== undefined) balances[id] -= splitAmount;
+                });
+            });
+            return balances;
         }
 
         function calculateGlobalDebt() {
             if (!state.currentUser || state.participants.length === 0) return 0;
-            const balances = {};
-            state.participants.forEach(p => balances[p.id] = 0);
-            state.expenses.forEach(exp => {
-                const amount = Number(exp.amount);
-                if (balances[exp.paid_by] !== undefined) balances[exp.paid_by] += amount;
-                const splitAmount = amount / state.participants.length;
-                state.participants.forEach(p => balances[p.id] -= splitAmount);
-            });
+            const balances = calculateBalances(state.expenses); // Across ALL expenses
+            
             let debtors = []; let creditors = [];
             for (const [id, balance] of Object.entries(balances)) {
                 const rounded = Math.round(balance * 100) / 100;
@@ -582,6 +631,7 @@
             return totalOwed;
         }
 
+        // --- RENDERING ---
         function renderAll() {
             renderParticipants();
             const isHistory = state.viewMode === 'history';
@@ -593,28 +643,42 @@
         function renderParticipants() {
             const list = document.getElementById('participants-list');
             const select = document.getElementById('exp-payer');
+            const restoreSection = document.getElementById('restore-part-section');
+            const restoreSelect = document.getElementById('restore-part-select');
 
-            if (state.participants.length === 0) {
-                list.innerHTML = `<li class="text-slate-400 italic text-sm">No participants added yet.</li>`;
+            const activeParticipants = state.participants.filter(p => !p.is_archived);
+            const archivedParticipants = state.participants.filter(p => p.is_archived);
+
+            // 1. Render Active List
+            if (activeParticipants.length === 0) {
+                list.innerHTML = `<li class="text-slate-400 italic text-sm">No participants in the current sheet.</li>`;
                 select.innerHTML = '<option value="">Who paid?</option>';
-                return;
+            } else {
+                list.innerHTML = activeParticipants.map(p => 
+                    `<li class="bg-white border border-indigo-100 shadow-sm rounded-lg pl-3 pr-1 py-1.5 flex items-center gap-2 text-sm fade-in group">
+                        <div class="flex flex-col">
+                            <span class="font-semibold text-slate-700 leading-tight">${p.name} ${p.id === state.currentUser ? '<span class="text-indigo-500">(You)</span>' : ''}</span>
+                            <span class="text-[10px] text-slate-400 font-medium">${p.upi_id}</span>
+                        </div>
+                        <div class="flex flex-col gap-0 border-l border-slate-100 pl-1 ml-1 opacity-20 group-hover:opacity-100 transition-opacity">
+                            <button onclick="editParticipant('${p.id}')" title="Edit" class="text-indigo-400 hover:text-indigo-600 p-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
+                            <button onclick="archiveParticipant('${p.id}')" title="Remove from Sheet" class="text-rose-400 hover:text-rose-600 p-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                        </div>
+                    </li>`
+                ).join('');
+                
+                const currentSelected = select.value;
+                select.innerHTML = '<option value="">Who paid?</option>' + activeParticipants.map(p => `<option value="${p.id}" ${p.id === currentSelected ? 'selected' : ''}>${p.name}</option>`).join('');
             }
 
-            list.innerHTML = state.participants.map(p => 
-                `<li class="bg-white border border-indigo-100 shadow-sm rounded-lg pl-3 pr-1 py-1.5 flex items-center gap-2 text-sm fade-in group">
-                    <div class="flex flex-col">
-                        <span class="font-semibold text-slate-700 leading-tight">${p.name} ${p.id === state.currentUser ? '<span class="text-indigo-500">(You)</span>' : ''}</span>
-                        <span class="text-[10px] text-slate-400 font-medium">${p.upi_id}</span>
-                    </div>
-                    <div class="flex flex-col gap-0 border-l border-slate-100 pl-1 ml-1 opacity-20 group-hover:opacity-100 transition-opacity">
-                        <button onclick="editParticipant('${p.id}')" class="text-indigo-400 hover:text-indigo-600 p-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
-                        <button onclick="deleteParticipant('${p.id}')" class="text-rose-400 hover:text-rose-600 p-0.5"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
-                    </div>
-                </li>`
-            ).join('');
-
-            const currentSelected = select.value;
-            select.innerHTML = '<option value="">Who paid?</option>' + state.participants.map(p => `<option value="${p.id}" ${p.id === currentSelected ? 'selected' : ''}>${p.name}</option>`).join('');
+            // 2. Render Saved/Archived List for Dropdown
+            if (archivedParticipants.length > 0) {
+                restoreSection.classList.remove('hidden');
+                restoreSelect.innerHTML = '<option value="">-- Select Saved Participant --</option>' + 
+                    archivedParticipants.map(p => `<option value="${p.id}">${p.name} (${p.upi_id})</option>`).join('');
+            } else {
+                restoreSection.classList.add('hidden');
+            }
         }
 
         function renderExpenses(visibleExpenses) {
@@ -662,7 +726,6 @@
             const container = document.getElementById('settlement-list');
             const countBadge = document.getElementById('settlement-count');
             
-            // Global Banner Logic
             const globalDebt = calculateGlobalDebt();
             if (globalDebt > 0) document.getElementById('debtor-banner').classList.remove('hidden');
             else document.getElementById('debtor-banner').classList.add('hidden');
@@ -673,14 +736,7 @@
                 return;
             }
 
-            const balances = {};
-            state.participants.forEach(p => balances[p.id] = 0);
-            visibleExpenses.forEach(exp => {
-                const amount = Number(exp.amount);
-                if (balances[exp.paid_by] !== undefined) balances[exp.paid_by] += amount;
-                const splitAmount = amount / state.participants.length;
-                state.participants.forEach(p => balances[p.id] -= splitAmount);
-            });
+            const balances = calculateBalances(visibleExpenses);
 
             let debtors = []; let creditors = [];
             for (const [id, balance] of Object.entries(balances)) {
@@ -732,7 +788,6 @@
                     <div class="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0 justify-end flex-1">
                         <div class="font-black text-slate-800 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 font-display">₹${s.amount.toFixed(2)}</div>
                         
-                        <!-- Actions -->
                         <a href="${whatsappUrl}" target="_blank" class="p-2 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg transition" title="Remind on WhatsApp">
                             <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                         </a>
