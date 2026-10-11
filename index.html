@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FairShare - Split & Settle</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@cloud/cloud-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     
     <style>
@@ -94,7 +94,7 @@
                     </div>
                     FairShare
                 </h1>
-                <p class="text-slate-500 mt-1 text-sm font-medium">Auto-deleting 14-day history. Supabase connected.</p>
+                <p class="text-slate-500 mt-1 text-sm font-medium">Auto-deleting 14-day history. cloud connected.</p>
             </div>
             <div class="flex flex-wrap justify-center items-center gap-3">
                 <button onclick="handleStartNewSheet()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-medium text-sm shadow-md transition flex items-center gap-2 transform hover:scale-105">
@@ -112,9 +112,9 @@
         <div id="setup-warning" class="hidden mb-8 bg-amber-50 border border-amber-200 p-5 rounded-2xl shadow-sm">
             <h3 class="text-amber-800 font-bold text-lg flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                Supabase SQL Updates Required
+                cloud SQL Updates Required
             </h3>
-            <p class="text-amber-700 mt-2 text-sm">Please run these commands in your Supabase SQL Editor to enable history preservation:</p>
+            <p class="text-amber-700 mt-2 text-sm">Please run these commands in your cloud SQL Editor to enable history preservation:</p>
             <pre class="mt-2 bg-amber-100 p-3 rounded-lg text-xs font-mono text-amber-900 overflow-x-auto">ALTER TABLE public.participants ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
         </div>
@@ -232,11 +232,11 @@ ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
 
     <script>
         // --- CONFIGURATION ---
-        const SUPABASE_URL = 'https://xmegtdhjigtqsljagwiv.supabase.co'; 
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtZWd0ZGhqaWd0cXNsamFnd2l2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMTA4ODEsImV4cCI6MjA4Njc4Njg4MX0.5WQ44IJYYCimkRRMeRPETWH0bzEY8th3VFDfOSyUcKQ';
+        const cloud_URL = 'https://xmegtdhjigtqsljagwiv.cloud.co'; 
+        const cloud_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtZWd0ZGhqaWd0cXNsamFnd2l2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyMTA4ODEsImV4cCI6MjA4Njc4Njg4MX0.5WQ44IJYYCimkRRMeRPETWH0bzEY8th3VFDfOSyUcKQ';
         
-        let supabaseClient;
-        let isConfigured = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
+        let cloudClient;
+        let isConfigured = cloud_URL !== 'YOUR_cloud_URL';
 
         // --- APP STATE ---
         const state = {
@@ -312,7 +312,7 @@ ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
             if (!isConfigured) return;
 
             try {
-                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                cloudClient = window.cloud.createClient(cloud_URL, cloud_ANON_KEY);
                 await cleanOldHistory();
                 await fetchData();
                 
@@ -331,18 +331,18 @@ ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
             const twoWeeksAgo = new Date();
             twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
             try {
-                await supabaseClient.from('expenses').delete().lt('created_at', twoWeeksAgo.toISOString());
+                await cloudClient.from('expenses').delete().lt('created_at', twoWeeksAgo.toISOString());
             } catch (e) { console.log("Silent cleanup failed", e); }
         }
 
         async function fetchData() {
             try {
-                const { data: parts, error: partsErr } = await supabaseClient.from('participants').select('*');
+                const { data: parts, error: partsErr } = await cloudClient.from('participants').select('*');
                 if (partsErr) throw partsErr;
                 // Ensure is_archived defaults to false if column is missing/null
                 state.participants = (parts || []).map(p => ({...p, is_archived: p.is_archived || false}));
 
-                const { data: exps, error: expsErr } = await supabaseClient.from('expenses').select('*').order('created_at', { ascending: false });
+                const { data: exps, error: expsErr } = await cloudClient.from('expenses').select('*').order('created_at', { ascending: false });
                 if (expsErr) throw expsErr;
                 state.expenses = (exps || []).map(e => ({...e, is_archived: e.is_archived || false}));
 
@@ -437,13 +437,13 @@ ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
             setLoading('btn-add-part', true, id ? "Update" : "Add Participant");
             try {
                 if (id) {
-                    const { error } = await supabaseClient.from('participants').update({ name, upi_id: upi }).eq('id', id);
+                    const { error } = await cloudClient.from('participants').update({ name, upi_id: upi }).eq('id', id);
                     if (error) throw error;
                     const idx = state.participants.findIndex(p => p.id === id);
                     if (idx > -1) { state.participants[idx].name = name; state.participants[idx].upi_id = upi; }
                     showToast("Participant updated!", "success");
                 } else {
-                    const { data, error } = await supabaseClient.from('participants').insert([{ name, upi_id: upi, is_archived: false }]).select();
+                    const { data, error } = await cloudClient.from('participants').insert([{ name, upi_id: upi, is_archived: false }]).select();
                     if (error) throw error;
                     state.participants.push(data[0]);
                     showToast("Participant added!", "success");
@@ -479,7 +479,7 @@ ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
         async function archiveParticipant(id) {
             // Soft delete - removes them from active sheet, preserves history!
             try {
-                const { error } = await supabaseClient.from('participants').update({ is_archived: true }).eq('id', id);
+                const { error } = await cloudClient.from('participants').update({ is_archived: true }).eq('id', id);
                 if (error) throw error;
                 const p = state.participants.find(p => p.id === id);
                 if(p) p.is_archived = true;
@@ -493,7 +493,7 @@ ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
             if (!id) return;
             
             try {
-                const { error } = await supabaseClient.from('participants').update({ is_archived: false }).eq('id', id);
+                const { error } = await cloudClient.from('participants').update({ is_archived: false }).eq('id', id);
                 if (error) throw error;
                 const p = state.participants.find(p => p.id === id);
                 if(p) p.is_archived = false;
@@ -519,14 +519,14 @@ ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
             setLoading('btn-add-exp', true, id ? "Update" : "Save Expense");
             try {
                 if (id) {
-                    const { error } = await supabaseClient.from('expenses').update({ description: desc, amount, paid_by: payerId }).eq('id', id);
+                    const { error } = await cloudClient.from('expenses').update({ description: desc, amount, paid_by: payerId }).eq('id', id);
                     if (error) throw error;
                     const idx = state.expenses.findIndex(e => e.id === id);
                     if (idx > -1) { state.expenses[idx].description = desc; state.expenses[idx].amount = amount; state.expenses[idx].paid_by = payerId; }
                     showToast("Expense updated!", "success");
                 } else {
                     const payload = { description: desc, amount, paid_by: payerId, is_archived: false, involved_ids: involvedIds };
-                    const { data, error } = await supabaseClient.from('expenses').insert([payload]).select();
+                    const { data, error } = await cloudClient.from('expenses').insert([payload]).select();
                     if (error) throw error;
                     state.expenses.unshift(data[0]);
                     showToast("Expense recorded!", "success");
@@ -572,7 +572,7 @@ ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
         async function deleteExpense(id) {
             if (!confirm("Are you sure?")) return;
             try {
-                const { error } = await supabaseClient.from('expenses').delete().eq('id', id);
+                const { error } = await cloudClient.from('expenses').delete().eq('id', id);
                 if (error) throw error;
                 state.expenses = state.expenses.filter(e => e.id !== id);
                 showToast("Expense deleted.", "success");
@@ -591,7 +591,7 @@ ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS involved_ids JSONB;</pre>
             
             try {
                 // We freeze the exact participant list into history so adding/removing later doesn't break old math!
-                const { error } = await supabaseClient.from('expenses').update({ 
+                const { error } = await cloudClient.from('expenses').update({ 
                     is_archived: true, 
                     involved_ids: activeParticipantIds 
                 }).in('id', ids);
