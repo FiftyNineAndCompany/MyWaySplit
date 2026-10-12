@@ -15,7 +15,11 @@
       appId: "233e26d3-7870-419f-981b-e1de2b055308", // <-- Paste your OneSignal App ID here 
       notifyButton: {
         enable: true,
+              
       },
+            // Explicitly define the subfolder path and scope for GitHub Pages
+      serviceWorkerPath: "/MyWaySplit/OneSignalSDKWorker.js",
+      serviceWorkerParam: { scope: "/MyWaySplit/" }
     });
   });
 </script>
