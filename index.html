@@ -390,7 +390,7 @@
             document.getElementById('identity-modal').classList.remove('hidden');
         }
 
-        function setIdentity(id, fromStorage = false) {
+       function setIdentity(id, fromStorage = false) {
             document.getElementById('identity-modal').classList.add('hidden');
             
             if (id) {
@@ -402,9 +402,10 @@
                     document.getElementById('guest-badge').classList.add('hidden');
                     document.getElementById('current-user-name').textContent = "Viewing as: " + user.name;
 
-                    // ---> ADD THIS ONE BLOCK TO MAP ONESIGNAL <---
                     window.OneSignalDeferred.push(async function(OneSignal) {
                         await OneSignal.login(id); 
+                        // Automatically trigger the native browser permission prompt right when they select their identity
+                        await OneSignal.Slidedown.promptPush();
                     });
                     
                     if (!fromStorage && "Notification" in window) {
@@ -420,6 +421,7 @@
             }
             renderAll();
         }
+             
 
         function setViewMode(mode) {
             state.viewMode = mode;
