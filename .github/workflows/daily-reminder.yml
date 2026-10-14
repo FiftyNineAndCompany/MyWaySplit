@@ -19,6 +19,6 @@ jobs:
               "app_id": "233e26d3-7870-419f-981b-e1de2b055308",
               "included_segments": ["Total Subscriptions"],
               "headings": {"en": "FairShare Daily Reminder 💰"},
-              "contents": {"en": "Time to check your pending settlements and pay your debts!"}
+              "contents": {"en": "Time to check your pending settlements and pay your debts!"},
               "url": "https://fairshare.saitechverse.com"
             }'
