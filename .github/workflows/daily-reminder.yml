@@ -1,0 +1,25 @@
+name: Daily Push Notification
+on:
+  schedule:
+    # Runs at 14:20 UTC every day, which perfectly matches 7:50 PM IST
+    - cron: '20 14 * * *'
+  # This line allows you to test the script manually with a button
+  workflow_dispatch: 
+
+jobs:
+  send-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger OneSignal API
+        run: |
+          curl --request POST \
+            --url https://onesignal.com/api/v1/notifications \
+            --header 'Authorization: Basic ${{ secrets.ONESIGNAL_REST_KEY }}' \
+            --header 'accept: application/json' \
+            --header 'content-type: application/json' \
+            --data '{
+              "app_id": "233e26d3-7870-419f-981b-e1de2b055308",
+              "included_segments": ["Total Subscriptions"],
+              "headings": {"en": "FairShare Daily Reminder 💰"},
+              "contents": {"en": "Time to check your pending settlements and pay your debts!"}
+            }'
