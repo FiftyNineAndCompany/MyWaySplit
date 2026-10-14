@@ -12,7 +12,7 @@ jobs:
         run: |
           curl -i --request POST \
             --url https://api.onesignal.com/notifications \
-            --header 'Authorization: Key ${{ secrets.ONESIGNAL_REST_KEY }}' \
+            --header 'Authorization: Basic ${{ secrets.ONESIGNAL_REST_KEY }}' \
             --header 'accept: application/json' \
             --header 'content-type: application/json' \
             --data '{
