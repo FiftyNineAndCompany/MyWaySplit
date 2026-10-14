@@ -20,4 +20,5 @@ jobs:
               "included_segments": ["Total Subscriptions"],
               "headings": {"en": "FairShare Daily Reminder 💰"},
               "contents": {"en": "Time to check your pending settlements and pay your debts!"}
+              "url": "https://fairshare.saitechverse.com"
             }'
