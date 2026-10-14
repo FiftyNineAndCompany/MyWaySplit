@@ -273,17 +273,12 @@
                 const min = now.getMinutes();
                 
                 // --- TEST SETTING FOR 7:50 PM ---
-                if (hour === 18 && min === 10 ) { 
+                if (hour === 18 && min === 30 ) { 
                     const key = `${now.toDateString()}-${hour}-${min}`;
                     if (lastReminderKey !== key) {
                         lastReminderKey = key;
                         
-                        // Play an audible sound effect using the browser's audio engine
-                        try {
-                            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); // Cash register sound
-                            audio.play();
-                        } catch(e) { console.log("Audio play blocked", e); }
-
+                        // Trigger the native Web Push (This automatically plays the system sound)
                         if (Notification.permission === 'granted') {
                             new Notification("FairShare Test Alarm 💰", {
                                 body: `Test push! You owe ₹${globalDebt.toFixed(2)}.`,
