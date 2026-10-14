@@ -1,9 +1,7 @@
 name: Daily Push Notification
 on:
   schedule:
-    # Runs at 14:20 UTC every day, which perfectly matches 7:50 PM IST
     - cron: '20 14 * * *'
-  # This line allows you to test the script manually with a button
   workflow_dispatch: 
 
 jobs:
@@ -12,9 +10,9 @@ jobs:
     steps:
       - name: Trigger OneSignal API
         run: |
-          curl --request POST \
-            --url https://onesignal.com/api/v1/notifications \
-            --header 'Authorization: Basic ${{ secrets.ONESIGNAL_REST_KEY }}' \
+          curl -i --request POST \
+            --url https://api.onesignal.com/notifications \
+            --header 'Authorization: Key ${{ secrets.ONESIGNAL_REST_KEY }}' \
             --header 'accept: application/json' \
             --header 'content-type: application/json' \
             --data '{
