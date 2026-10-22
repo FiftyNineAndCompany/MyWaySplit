@@ -121,7 +121,7 @@ export default function Home() {
   const isAdmin = activeGroup?.created_by === user?.id;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 w-full max-w-full overflow-x-hidden">
       <OneSignalProvider currentUser={currentUserId} />
 
       {/* Hero Banner */}

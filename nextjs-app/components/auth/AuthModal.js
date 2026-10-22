@@ -41,12 +41,12 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overscroll-contain animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overscroll-contain animate-in fade-in duration-150 w-full max-w-full">
       {/* Click outside backdrop to close */}
       <div className="fixed inset-0" onClick={onClose} aria-hidden="true" />
 
-      {/* Modal Card - Sized and constrained for all mobile screen heights */}
-      <div className="relative w-full max-w-sm sm:max-w-md my-auto bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-2xl border border-slate-100 max-h-[88vh] max-h-[88dvh] overflow-y-auto z-10">
+      {/* Modal Card - Strictly fitted to mobile screen width with side margins */}
+      <div className="relative w-[calc(100vw-1.5rem)] sm:w-full max-w-sm sm:max-w-md mx-auto my-auto bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-2xl border border-slate-100 max-h-[88vh] max-h-[88dvh] overflow-y-auto z-10">
         <button
           onClick={onClose}
           type="button"

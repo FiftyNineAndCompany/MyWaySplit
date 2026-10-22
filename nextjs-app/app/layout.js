@@ -19,21 +19,29 @@ export const metadata = {
   },
 };
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: '#4f46e5',
+};
+
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" className="w-full max-w-full overflow-x-hidden">
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <Script
           src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
           strategy="afterInteractive"
         />
       </head>
-      <body className="min-h-screen flex flex-col relative">
+      <body className="min-h-screen flex flex-col relative w-full max-w-full overflow-x-hidden">
         <FloatingBackground />
         <AuthProvider>
           <ToastProvider>
             <Header />
-            <main className="max-w-7xl mx-auto px-4 py-8 flex-1 w-full z-10 relative">
+            <main className="max-w-7xl mx-auto px-3 sm:px-4 py-6 sm:py-8 flex-1 w-full z-10 relative">
               {children}
             </main>
             <Footer />
