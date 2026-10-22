@@ -1,12 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/layout/Toast';
 
 export default function LoanApplicationForm({ product, initialAmount = 25000, participants = [], onClose, onSuccess }) {
   const { showToast } = useToast();
   const [submitting, setSubmitting] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [formData, setFormData] = useState({
     applicantName: '',
@@ -74,8 +80,10 @@ export default function LoanApplicationForm({ product, initialAmount = 25000, pa
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
           <div>
@@ -239,6 +247,7 @@ export default function LoanApplicationForm({ product, initialAmount = 25000, pa
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

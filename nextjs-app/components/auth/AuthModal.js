@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/authContext';
 import { useToast } from '@/components/layout/Toast';
 
@@ -9,6 +10,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
   const { showToast } = useToast();
   const [mode, setMode] = useState(defaultMode); // 'signin' | 'signup'
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,7 +18,23 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
   const [upiId, setUpiId] = useState('');
   const [phone, setPhone] = useState('');
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Lock background scroll when modal is active
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
+  if (!isOpen || !mounted) return null;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -40,13 +58,13 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overscroll-contain animate-in fade-in duration-150 w-full max-w-full">
+  const modalContent = (
+    <div className="fixed inset-0 z-[9999] overflow-y-auto overflow-x-hidden bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overscroll-contain animate-in fade-in duration-150 w-full max-w-full">
       {/* Click outside backdrop to close */}
       <div className="fixed inset-0" onClick={onClose} aria-hidden="true" />
 
       {/* Modal Card - Strictly fitted to mobile screen width with side margins */}
-      <div className="relative w-[calc(100vw-1.5rem)] sm:w-full max-w-sm sm:max-w-md mx-auto my-auto bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-2xl border border-slate-100 max-h-[88vh] max-h-[88dvh] overflow-y-auto z-10">
+      <div className="relative w-[calc(100vw-1.5rem)] sm:w-full max-w-sm sm:max-w-md mx-auto my-auto bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-2xl border border-slate-100 max-h-[88vh] max-h-[88dvh] overflow-y-auto z-10">
         <button
           onClick={onClose}
           type="button"
@@ -205,4 +223,6 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
