@@ -237,8 +237,9 @@ export default function GroupManager({
 
       {/* Modal: Create New Group */}
       {isCreating && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overscroll-contain animate-in fade-in duration-150">
+          <div className="fixed inset-0" onClick={() => setIsCreating(false)} aria-hidden="true" />
+          <div className="relative w-full max-w-sm sm:max-w-md my-auto bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-2xl border border-slate-100 max-h-[88vh] max-h-[88dvh] overflow-y-auto z-10">
             <h3 className="text-xl font-bold font-display text-slate-900">Create New Expense Group</h3>
             <p className="text-xs text-slate-500 mt-1 mb-4">
               Groups act as isolated multi-tenant expense sheets for trips, apartments, or events.
@@ -291,8 +292,9 @@ export default function GroupManager({
 
       {/* Modal: Add Member Direct */}
       {isAddingMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overscroll-contain animate-in fade-in duration-150">
+          <div className="fixed inset-0" onClick={() => setIsAddingMember(false)} aria-hidden="true" />
+          <div className="relative w-full max-w-sm sm:max-w-md my-auto bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-2xl border border-slate-100 max-h-[88vh] max-h-[88dvh] overflow-y-auto z-10">
             <h3 className="text-xl font-bold font-display text-slate-900">Add Member to {activeGroup?.name}</h3>
             <p className="text-xs text-slate-500 mt-1 mb-4">
               They will receive an in-app invite and web push notification.

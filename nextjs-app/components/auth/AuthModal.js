@@ -34,30 +34,34 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
       onClose();
     } catch (err) {
       console.error('Auth error:', err);
-      showToast(err.message || 'Authentication failed. Please verify your credentials.', 'error');
+      showToast(err.message || 'Authentication failed. Please check your credentials.', 'error');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6 flex min-h-screen items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="relative w-full max-w-md my-auto rounded-3xl bg-white p-6 sm:p-8 shadow-2xl border border-slate-100 max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overscroll-contain animate-in fade-in duration-150">
+      {/* Click outside backdrop to close */}
+      <div className="fixed inset-0" onClick={onClose} aria-hidden="true" />
+
+      {/* Modal Card - Sized and constrained for all mobile screen heights */}
+      <div className="relative w-full max-w-sm sm:max-w-md my-auto bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-2xl border border-slate-100 max-h-[88vh] max-h-[88dvh] overflow-y-auto z-10">
         <button
           onClick={onClose}
           type="button"
-          className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 p-2 rounded-full hover:bg-slate-100 transition z-10"
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 transition z-20"
           title="Close"
         >
           ✕
         </button>
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-slate-100 mb-6 pb-1">
+        <div className="flex border-b border-slate-100 mb-4 sm:mb-5 pb-1 pr-8">
           <button
             type="button"
             onClick={() => setMode('signin')}
-            className={`flex-1 pb-3 text-center text-sm font-bold transition-all border-b-2 ${
+            className={`flex-1 pb-2.5 text-center text-xs sm:text-sm font-bold transition-all border-b-2 ${
               mode === 'signin'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -68,7 +72,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
           <button
             type="button"
             onClick={() => setMode('signup')}
-            className={`flex-1 pb-3 text-center text-sm font-bold transition-all border-b-2 ${
+            className={`flex-1 pb-2.5 text-center text-xs sm:text-sm font-bold transition-all border-b-2 ${
               mode === 'signup'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -79,45 +83,51 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
         </div>
 
         <div>
-          <h2 className="text-2xl font-black font-display text-slate-900 tracking-tight">
-            {mode === 'signup' ? 'Create Account' : 'Sign In'}
+          <h2 className="text-xl sm:text-2xl font-black font-display text-slate-900 tracking-tight">
+            {mode === 'signup' ? 'Create Account' : 'Welcome Back'}
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-slate-500 mt-1 leading-snug">
             {mode === 'signup'
-              ? 'Join MyWaySplit to manage your group expense sheets.'
-              : 'Enter your credentials to access your shared sheets & settlements.'}
+              ? 'Join to create and share expense sheets.'
+              : 'Sign in to access your shared sheets & settlements.'}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-3.5 mt-4 sm:mt-5">
           {mode === 'signup' && (
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
+              <label className="block text-[11px] sm:text-xs font-semibold text-slate-700 mb-1">
+                Full Name *
+              </label>
               <input
                 type="text"
                 required
                 value={fullName}
                 onChange={e => setFullName(e.target.value)}
                 placeholder="e.g. Rahul Sharma"
-                className="input"
+                className="input py-2 px-3 text-base sm:text-sm"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address *</label>
+            <label className="block text-[11px] sm:text-xs font-semibold text-slate-700 mb-1">
+              Email Address *
+            </label>
             <input
               type="email"
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="input"
+              className="input py-2 px-3 text-base sm:text-sm"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Password *</label>
+            <label className="block text-[11px] sm:text-xs font-semibold text-slate-700 mb-1">
+              Password *
+            </label>
             <input
               type="password"
               required
@@ -125,30 +135,34 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="input"
+              className="input py-2 px-3 text-base sm:text-sm"
             />
           </div>
 
           {mode === 'signup' && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">UPI ID (Optional)</label>
+                <label className="block text-[11px] sm:text-xs font-semibold text-slate-700 mb-1">
+                  UPI ID (Optional)
+                </label>
                 <input
                   type="text"
                   value={upiId}
                   onChange={e => setUpiId(e.target.value)}
                   placeholder="name@okhdfc"
-                  className="input text-xs"
+                  className="input py-2 px-3 text-base sm:text-xs"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Mobile Phone (Optional)</label>
+                <label className="block text-[11px] sm:text-xs font-semibold text-slate-700 mb-1">
+                  Mobile (Optional)
+                </label>
                 <input
                   type="tel"
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
                   placeholder="9876543210"
-                  className="input text-xs"
+                  className="input py-2 px-3 text-base sm:text-xs"
                 />
               </div>
             </div>
@@ -157,13 +171,13 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
           <button
             type="submit"
             disabled={loading}
-            className="btn btn-primary w-full py-3 text-sm font-semibold shadow-lg shadow-indigo-100 mt-2"
+            className="btn btn-primary w-full py-2.5 sm:py-3 text-sm font-semibold shadow-md shadow-indigo-100 mt-2"
           >
             {loading ? 'Please wait...' : mode === 'signup' ? 'Create Account' : 'Sign In'}
           </button>
         </form>
 
-        <div className="mt-5 text-center text-xs text-slate-400">
+        <div className="mt-4 pt-3 border-t border-slate-100 text-center text-xs text-slate-500">
           {mode === 'signup' ? (
             <p>
               Already have an account?{' '}

@@ -229,10 +229,16 @@ h1, h2, h3, h4, .font-display {
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
-  font-size: 0.875rem;
+  font-size: 1rem; /* 16px default to prevent mobile browser auto-zoom */
   color: var(--color-text);
   transition: all 0.15s ease;
   outline: none;
+}
+
+@media (min-width: 640px) {
+  .input {
+    font-size: 0.875rem;
+  }
 }
 
 .input:focus {
