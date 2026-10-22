@@ -161,6 +161,11 @@ h1, h2, h3, h4, .font-display {
   outline: none;
 }
 
+.btn.hidden,
+.hidden {
+  display: none !important;
+}
+
 .btn:active {
   transform: scale(0.97);
 }
