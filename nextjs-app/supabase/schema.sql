@@ -259,6 +259,9 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE;
 DROP POLICY IF EXISTS "profiles_select_public" ON profiles;
 CREATE POLICY "profiles_select_public" ON profiles FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "profiles_insert_own" ON profiles;
+CREATE POLICY "profiles_insert_own" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+
 DROP POLICY IF EXISTS "profiles_update_own" ON profiles;
 CREATE POLICY "profiles_update_own" ON profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 

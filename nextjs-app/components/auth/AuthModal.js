@@ -43,8 +43,12 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
     try {
       if (mode === 'signup') {
         if (!fullName.trim()) throw new Error('Please enter your full name.');
-        await signUp(email.trim(), password, fullName.trim(), upiId.trim(), phone.trim());
-        showToast('Account created successfully! Welcome to MyWaySplit.', 'success');
+        const res = await signUp(email.trim(), password, fullName.trim(), upiId.trim(), phone.trim());
+        if (res?.session) {
+          showToast('Account created successfully! Welcome to MyWaySplit.', 'success');
+        } else {
+          showToast('Account created! If email confirmation is enabled, check your email inbox.', 'success');
+        }
       } else {
         await signIn(email.trim(), password);
         showToast('Signed in successfully!', 'success');

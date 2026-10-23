@@ -100,10 +100,14 @@ export function AuthProvider({ children }) {
   };
 
   const signUp = async (email, password, fullName, upiId = '', phone = '') => {
+    // Provide dynamic redirect URL to current origin (Vercel / live domain / localhost)
+    const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}` : undefined;
+
     const res = await supabase.auth.signUp({
       email,
       password,
       options: {
+        emailRedirectTo: redirectUrl,
         data: {
           full_name: fullName,
           upi_id: upiId,
@@ -114,7 +118,8 @@ export function AuthProvider({ children }) {
 
     if (res.error) throw res.error;
 
-    if (res.data.user) {
+    // If session is returned immediately (email confirmation disabled), set active user
+    if (res.data?.session && res.data?.user) {
       const profileData = {
         id: res.data.user.id,
         email,
@@ -123,7 +128,11 @@ export function AuthProvider({ children }) {
         phone: phone || null,
         avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${fullName}`,
       };
-      await supabase.from('profiles').upsert([profileData]);
+      try {
+        await supabase.from('profiles').upsert([profileData]);
+      } catch (err) {
+        console.warn('Profile upsert note:', err);
+      }
       setUser(res.data.user);
       setProfile(profileData);
     }
