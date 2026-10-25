@@ -31,24 +31,38 @@ export default function NotificationBell() {
   useEffect(() => {
     fetchNotifications();
 
-    // Set up Supabase real-time channel for instant in-app alerts
-    if (!user) return;
+    if (!user?.id) return;
 
-    const channel = supabase
-      .channel(`user-notifs-${user.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
-        payload => {
-          setNotifications(prev => [payload.new, ...prev]);
-        }
-      )
-      .subscribe();
+    let channel = null;
+    try {
+      // Use unique channel topic per mount so Supabase never reuses an already-subscribed channel
+      const channelId = `user-notifs-${user.id}-${Date.now()}`;
+      channel = supabase
+        .channel(channelId)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+          payload => {
+            if (payload?.new) {
+              setNotifications(prev => [payload.new, ...prev]);
+            }
+          }
+        )
+        .subscribe(status => {
+          if (status === 'CHANNEL_ERROR') {
+            console.warn('[Realtime] Notifications channel error');
+          }
+        });
+    } catch (err) {
+      console.warn('Realtime channel setup error:', err);
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
-  }, [user, fetchNotifications]);
+  }, [user?.id, fetchNotifications]);
 
   // Click outside to close
   useEffect(() => {
