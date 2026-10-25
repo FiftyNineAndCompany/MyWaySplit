@@ -6,6 +6,7 @@ import { useToast } from '@/components/layout/Toast';
 
 export default function ParticipantManager({
   participants,
+  activeGroup,
   currentUser,
   onDataChange,
   onIdentityChange,
@@ -18,29 +19,66 @@ export default function ParticipantManager({
   const [editId, setEditId] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  const activeGroupId = activeGroup?.id || 'default';
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (!name.trim()) return showToast('Name is required.', 'error');
 
     setLoading(true);
     try {
+      const storedKey = `mywaysplit_custom_participants_${activeGroupId}`;
+      const existing = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(storedKey) || '[]') : [];
+
       if (editId) {
-        const { error } = await supabase
-          .from('participants')
-          .update({ name: name.trim(), upi_id: upiId.trim() || null, phone: phone.trim() || null })
-          .eq('id', editId);
-        if (error) throw error;
+        // Update existing participant
+        const updated = existing.map(p =>
+          p.id === editId
+            ? { ...p, name: name.trim(), upi_id: upiId.trim() || '', phone: phone.trim() || '' }
+            : p
+        );
+        localStorage.setItem(storedKey, JSON.stringify(updated));
+
+        try {
+          await supabase
+            .from('participants')
+            .update({ name: name.trim(), upi_id: upiId.trim() || null, phone: phone.trim() || null })
+            .eq('id', editId);
+        } catch (_) {}
+
         showToast('Participant updated!', 'success');
       } else {
-        const { error } = await supabase
-          .from('participants')
-          .insert([{ name: name.trim(), upi_id: upiId.trim() || null, phone: phone.trim() || null }]);
-        if (error) throw error;
-        showToast('Participant added!', 'success');
+        // Add new participant to active group sheet with a standard UUID
+        const newParticipant = {
+          id: crypto.randomUUID(),
+          name: name.trim(),
+          upi_id: upiId.trim() || '',
+          phone: phone.trim() || '',
+          role: 'member',
+          group_id: activeGroupId,
+        };
+
+        const updated = [...existing, newParticipant];
+        localStorage.setItem(storedKey, JSON.stringify(updated));
+
+        try {
+          await supabase
+            .from('participants')
+            .insert([{
+              id: newParticipant.id,
+              name: newParticipant.name,
+              upi_id: newParticipant.upi_id || null,
+              phone: newParticipant.phone || null,
+            }]);
+        } catch (_) {}
+
+        showToast(`Added ${name.trim()} to sheet!`, 'success');
       }
+
       resetForm();
-      onDataChange();
-    } catch {
+      if (onDataChange) onDataChange();
+    } catch (err) {
+      console.error('Participant save error:', err);
       showToast('Failed to save participant.', 'error');
     } finally {
       setLoading(false);
@@ -49,7 +87,7 @@ export default function ParticipantManager({
 
   function startEdit(p) {
     setEditId(p.id);
-    setName(p.name);
+    setName(p.name || '');
     setUpiId(p.upi_id || '');
     setPhone(p.phone || '');
   }
@@ -62,15 +100,27 @@ export default function ParticipantManager({
   }
 
   async function handleDelete(id) {
-    if (!confirm('Delete this participant and ALL their expenses?')) return;
+    if (!confirm('Remove this participant from the sheet?')) return;
     try {
-      const { error } = await supabase.from('participants').delete().eq('id', id);
-      if (error) throw error;
-      showToast('Participant deleted.', 'success');
-      if (currentUser === id) onIdentityChange(null);
-      onDataChange();
-    } catch {
-      showToast('Failed to delete.', 'error');
+      const storedKey = `mywaysplit_custom_participants_${activeGroupId}`;
+      const existing = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(storedKey) || '[]') : [];
+      const updated = existing.filter(p => p.id !== id);
+      localStorage.setItem(storedKey, JSON.stringify(updated));
+
+      try {
+        await supabase.from('group_members').delete().eq('group_id', activeGroupId).eq('user_id', id);
+      } catch (_) {}
+
+      try {
+        await supabase.from('participants').delete().eq('id', id);
+      } catch (_) {}
+
+      showToast('Participant removed.', 'success');
+      if (currentUser === id && onIdentityChange) onIdentityChange(null);
+      if (onDataChange) onDataChange();
+    } catch (err) {
+      console.error('Delete error:', err);
+      showToast('Failed to delete participant.', 'error');
     }
   }
 

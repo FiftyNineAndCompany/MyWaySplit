@@ -90,49 +90,63 @@ export default function GroupManager({
     showToast('Invite link copied to clipboard!', 'success');
   }
 
-  // 3. Add Member Directly & Dispatch In-App + Web Push Notification
   async function handleAddMemberDirect(e) {
     e.preventDefault();
     if (!memberEmail.trim() || !activeGroup) return;
     setLoading(true);
 
     try {
-      // Find or create profile for invited user
-      let targetUserId = null;
-      const { data: existingProfile } = await supabase
+      const cleanEmail = memberEmail.trim().toLowerCase();
+
+      // Find registered profile for invited user (use limit(1) to avoid 406 errors)
+      const { data: existingProfiles, error: searchErr } = await supabase
         .from('profiles')
         .select('id, full_name, email')
-        .eq('email', memberEmail.trim().toLowerCase())
-        .single();
+        .ilike('email', cleanEmail)
+        .limit(1);
 
-      if (existingProfile) {
-        targetUserId = existingProfile.id;
-      } else {
-        // Create pending profile
-        const { data: newProf } = await supabase
-          .from('profiles')
-          .insert([{
-            id: crypto.randomUUID(),
-            email: memberEmail.trim().toLowerCase(),
-            full_name: memberName.trim() || memberEmail.split('@')[0],
-          }])
-          .select()
-          .single();
-        targetUserId = newProf?.id;
+      if (searchErr) throw searchErr;
+
+      const existingProfile = existingProfiles && existingProfiles[0];
+
+      if (!existingProfile) {
+        showToast(
+          `"${cleanEmail}" is not registered yet. Use "Share Link" to send them the invite so they can create an account and join!`,
+          'warning'
+        );
+        return;
       }
 
-      if (targetUserId) {
-        // Add to group_members
-        await supabase
-          .from('group_members')
-          .upsert([{
-            group_id: activeGroup.id,
-            user_id: targetUserId,
-            role: 'member',
-            status: 'active',
-          }]);
+      const targetUserId = existingProfile.id;
 
-        // Insert In-App Notification
+      // Check if user is already a member of this group
+      const { data: existingMember } = await supabase
+        .from('group_members')
+        .select('id')
+        .eq('group_id', activeGroup.id)
+        .eq('user_id', targetUserId)
+        .maybeSingle();
+
+      if (existingMember) {
+        showToast(`${existingProfile.full_name || cleanEmail} is already a member of ${activeGroup.name}.`, 'info');
+        setIsAddingMember(false);
+        return;
+      }
+
+      // Add to group_members in Supabase
+      const { error: insertErr } = await supabase
+        .from('group_members')
+        .insert([{
+          group_id: activeGroup.id,
+          user_id: targetUserId,
+          role: 'member',
+          status: 'active',
+        }]);
+
+      if (insertErr) throw insertErr;
+
+      // Send In-App Notification
+      try {
         await supabase
           .from('notifications')
           .insert([{
@@ -142,30 +156,32 @@ export default function GroupManager({
             title: `Added to ${activeGroup.name}`,
             message: `${profile?.full_name || 'Admin'} added you to the expense group "${activeGroup.name}".`,
           }]);
-
-        // Trigger Real-time Push Notification via OneSignal API
-        try {
-          await fetch('/api/notifications', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              recipientIds: [targetUserId],
-              heading: `👥 Added to ${activeGroup.name}`,
-              content: `${profile?.full_name || 'A friend'} added you to "${activeGroup.name}". View shared expenses now.`,
-              senderId: user?.id,
-              type: 'system',
-            }),
-          });
-        } catch (pushErr) {
-          console.warn('Push notification dispatch note:', pushErr);
-        }
-
-        showToast(`Added ${memberName || memberEmail} to group!`, 'success');
-        setMemberEmail('');
-        setMemberName('');
-        setIsAddingMember(false);
-        onRefreshGroups();
+      } catch (notifErr) {
+        console.warn('In-app notification note:', notifErr);
       }
+
+      // Trigger Real-time Push Notification via OneSignal API if configured
+      try {
+        await fetch('/api/notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipientIds: [targetUserId],
+            heading: `👥 Added to ${activeGroup.name}`,
+            content: `${profile?.full_name || 'A friend'} added you to "${activeGroup.name}". View shared expenses now.`,
+            senderId: user?.id,
+            type: 'system',
+          }),
+        });
+      } catch (pushErr) {
+        console.warn('Push notification dispatch note:', pushErr);
+      }
+
+      showToast(`Added ${existingProfile.full_name || cleanEmail} to ${activeGroup.name}!`, 'success');
+      setMemberEmail('');
+      setMemberName('');
+      setIsAddingMember(false);
+      onRefreshGroups();
     } catch (err) {
       console.error('Error adding member:', err);
       showToast(err.message || 'Could not add member.', 'error');
@@ -329,7 +345,26 @@ export default function GroupManager({
                   onChange={e => setMemberEmail(e.target.value)}
                   className="input"
                 />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Enter their registered email to add them immediately.
+                </p>
               </div>
+
+              {activeGroup?.invite_code && (
+                <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-100 flex items-center justify-between gap-2">
+                  <div className="text-[11px] text-indigo-900 leading-snug">
+                    <span className="font-semibold">Friend not registered yet?</span>
+                    <p className="text-indigo-600/80">Copy the invite link and share it via WhatsApp.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={copyInviteLink}
+                    className="btn bg-white hover:bg-indigo-100 text-indigo-700 font-bold text-xs py-1.5 px-3 border border-indigo-200 shadow-sm shrink-0"
+                  >
+                    🔗 Copy Link
+                  </button>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 <button

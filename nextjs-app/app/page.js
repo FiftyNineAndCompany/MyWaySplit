@@ -46,8 +46,39 @@ export default function Home() {
         const found = data.find(g => g.id === storedActiveId) || data[0];
         setActiveGroup(found);
       } else {
-        setGroups([]);
-        setActiveGroup(null);
+        // Auto-create initial group for new user so their expense sheet is immediately ready
+        try {
+          const inviteCode = Math.random().toString(36).substring(2, 10);
+          const { data: newGrp } = await supabase
+            .from('groups')
+            .insert([{
+              name: 'My Expenses',
+              description: 'Personal & shared expense sheet',
+              invite_code: inviteCode,
+              created_by: user.id,
+            }])
+            .select()
+            .single();
+
+          if (newGrp) {
+            await supabase.from('group_members').insert([{
+              group_id: newGrp.id,
+              user_id: user.id,
+              role: 'admin',
+              status: 'active',
+            }]);
+            setGroups([newGrp]);
+            setActiveGroup(newGrp);
+            localStorage.setItem('mywaysplit_active_group_id', newGrp.id);
+          } else {
+            setGroups([]);
+            setActiveGroup(null);
+          }
+        } catch (grpErr) {
+          console.warn('Auto group setup notice:', grpErr);
+          setGroups([]);
+          setActiveGroup(null);
+        }
       }
     } catch (err) {
       console.warn('Groups fetch error:', err);
@@ -61,7 +92,7 @@ export default function Home() {
     if (!activeGroup?.id || !user) return;
 
     try {
-      // Fetch members of active group from Supabase
+      // 1. Fetch registered members of active group from Supabase
       const { data: memberRows } = await supabase
         .from('group_members')
         .select(`
@@ -71,18 +102,40 @@ export default function Home() {
         `)
         .eq('group_id', activeGroup.id);
 
-      if (memberRows && memberRows.length > 0) {
-        const formatted = memberRows.map(m => ({
-          id: m.profiles?.id || m.user_id,
-          name: m.profiles?.full_name || 'Member',
-          upi_id: m.profiles?.upi_id || '',
-          phone: m.profiles?.phone || '',
-          role: m.role,
-        }));
-        setParticipants(formatted);
-      } else {
-        setParticipants([]);
+      const registeredMembers = (memberRows || []).map(m => ({
+        id: m.profiles?.id || m.user_id,
+        name: m.profiles?.full_name || 'Member',
+        upi_id: m.profiles?.upi_id || '',
+        phone: m.profiles?.phone || '',
+        role: m.role,
+      }));
+
+      // 2. Fetch custom sheet participants added to this active group
+      const storedKey = `mywaysplit_custom_participants_${activeGroup.id}`;
+      const customParticipants = typeof window !== 'undefined'
+        ? JSON.parse(localStorage.getItem(storedKey) || '[]')
+        : [];
+
+      // 3. Merge both lists (avoiding duplicate IDs)
+      const merged = [...registeredMembers];
+      customParticipants.forEach(cp => {
+        if (!merged.some(p => p.id === cp.id)) {
+          merged.push(cp);
+        }
+      });
+
+      // If list is still empty, include current user
+      if (merged.length === 0) {
+        merged.push({
+          id: user.id,
+          name: profile?.full_name || user.email?.split('@')[0] || 'You',
+          upi_id: profile?.upi_id || '',
+          phone: profile?.phone || '',
+          role: 'admin',
+        });
       }
+
+      setParticipants(merged);
 
       // Fetch expenses for active group
       const { data: expenseRows } = await supabase
@@ -249,6 +302,7 @@ export default function Home() {
               <div className="lg:col-span-5 space-y-6">
                 <ParticipantManager
                   participants={participants}
+                  activeGroup={activeGroup}
                   currentUser={currentUserId}
                   onDataChange={loadGroupData}
                   onIdentifyUser={() => {}}

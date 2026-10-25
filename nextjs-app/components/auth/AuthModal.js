@@ -18,9 +18,18 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
   const [upiId, setUpiId] = useState('');
   const [phone, setPhone] = useState('');
 
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Clear messages when switching mode or opening
+  useEffect(() => {
+    setErrorMessage('');
+    setSuccessMessage('');
+  }, [mode, isOpen]);
 
   // Lock background scroll when modal is active
   useEffect(() => {
@@ -38,25 +47,65 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    setErrorMessage('');
+    setSuccessMessage('');
     setLoading(true);
 
     try {
       if (mode === 'signup') {
         if (!fullName.trim()) throw new Error('Please enter your full name.');
+        
+        // 1. Create account
         const res = await signUp(email.trim(), password, fullName.trim(), upiId.trim(), phone.trim());
-        if (res?.session) {
-          showToast('Account created successfully! Welcome to MyWaySplit.', 'success');
-        } else {
-          showToast('Account created! If email confirmation is enabled, check your email inbox.', 'success');
+
+        // 2. Next step: Immediately attempt sign-in with the same credentials
+        try {
+          await signIn(email.trim(), password);
+          showToast('Account created and signed in successfully!', 'success');
+          onClose();
+          return;
+        } catch (signInErr) {
+          const errMsg = signInErr?.message || '';
+          if (errMsg.toLowerCase().includes('email not confirmed')) {
+            // Email confirmation is required by Supabase project
+            setMode('signin');
+            setSuccessMessage('Account created! Please check your email to confirm your account, then sign in with your credentials.');
+            showToast('Account created! Please confirm your email, then sign in.', 'success');
+            return;
+          }
+          // If auto sign-in succeeded through session
+          if (res?.session) {
+            showToast('Account created successfully! Welcome to MyWaySplit.', 'success');
+            onClose();
+            return;
+          }
+          // Otherwise switch to sign-in tab
+          setMode('signin');
+          setSuccessMessage('Account created! Please sign in with your email and password below.');
         }
       } else {
-        await signIn(email.trim(), password);
-        showToast('Signed in successfully!', 'success');
+        // Sign In Mode: Verify credentials
+        try {
+          await signIn(email.trim(), password);
+          showToast('Signed in successfully!', 'success');
+          onClose();
+        } catch (signInErr) {
+          console.error('Sign-in error:', signInErr);
+          const rawMsg = signInErr?.message || '';
+          if (rawMsg.toLowerCase().includes('invalid login credentials')) {
+            throw new Error('Incorrect email or password. Please check your credentials and try again.');
+          } else if (rawMsg.toLowerCase().includes('email not confirmed')) {
+            throw new Error('Your email has not been confirmed yet. Please verify your email inbox or disable email confirmation in Supabase.');
+          } else {
+            throw new Error(rawMsg || 'Login failed. Please verify your email and password.');
+          }
+        }
       }
-      onClose();
     } catch (err) {
       console.error('Auth error:', err);
-      showToast(err.message || 'Authentication failed. Please check your credentials.', 'error');
+      const friendlyMsg = err.message || 'Authentication failed. Please check your credentials.';
+      setErrorMessage(friendlyMsg);
+      showToast(friendlyMsg, 'error');
     } finally {
       setLoading(false);
     }
@@ -114,6 +163,22 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
               : 'Sign in to access your shared sheets & settlements.'}
           </p>
         </div>
+
+        {/* Inline Error Message */}
+        {errorMessage && (
+          <div className="mt-3 p-3 rounded-xl bg-rose-50 border border-rose-200/80 text-rose-700 text-xs flex items-start gap-2 animate-in fade-in">
+            <span className="text-sm shrink-0">⚠️</span>
+            <p className="leading-relaxed font-medium">{errorMessage}</p>
+          </div>
+        )}
+
+        {/* Inline Success/Info Message */}
+        {successMessage && (
+          <div className="mt-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-xs flex items-start gap-2 animate-in fade-in">
+            <span className="text-sm shrink-0">✅</span>
+            <p className="leading-relaxed font-medium">{successMessage}</p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-3.5 mt-4 sm:mt-5">
           {mode === 'signup' && (

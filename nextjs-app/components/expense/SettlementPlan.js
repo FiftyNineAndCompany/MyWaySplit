@@ -49,20 +49,20 @@ export default function SettlementPlan({ participants, expenses, currentUser }) 
                 <div className="flex items-center gap-4">
                   <div className="relative">
                     <div className="w-10 h-10 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm shadow-inner z-10 relative border-2 border-white">
-                      {s.from.name.charAt(0).toUpperCase()}
+                      {(s.from?.name || 'U').charAt(0).toUpperCase()}
                     </div>
                     <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shadow-inner absolute top-0 left-6 border-2 border-white">
-                      {s.to.name.charAt(0).toUpperCase()}
+                      {(s.to?.name || 'U').charAt(0).toUpperCase()}
                     </div>
                   </div>
                   <div className="font-medium text-slate-700 ml-4">
                     {isUserDebtor ? (
                       <span className="font-bold text-rose-600">You</span>
                     ) : (
-                      <span className="font-bold text-slate-800">{s.from.name}</span>
+                      <span className="font-bold text-slate-800">{s.from?.name || 'Member'}</span>
                     )}{' '}
                     owe{isUserDebtor ? '' : 's'}{' '}
-                    <span className="font-bold text-slate-800">{s.to.name}</span>
+                    <span className="font-bold text-slate-800">{s.to?.name || 'Member'}</span>
                   </div>
                 </div>
 
