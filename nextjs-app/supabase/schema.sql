@@ -94,6 +94,27 @@ CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_group ON group_members(group_id);
 
 -- ============================================================
+-- 3b. PARTICIPANTS (Custom Sheet Members & External Friends)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS participants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  upi_id TEXT,
+  phone TEXT,
+  group_id UUID REFERENCES groups(id) ON DELETE CASCADE,
+  is_archived BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS group_id UUID REFERENCES groups(id) ON DELETE CASCADE;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS upi_id TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT false;
+
+CREATE INDEX IF NOT EXISTS idx_participants_group ON participants(group_id);
+
+-- ============================================================
 -- 4. EXPENSES (With Selective Inclusion/Exclusion & Categories)
 -- ============================================================
 
@@ -255,10 +276,13 @@ RETURNS BOOLEAN AS $$
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
--- Helper security function: Check if user is group admin
+-- Helper security function: Check if user is group admin or creator
 CREATE OR REPLACE FUNCTION is_group_admin(check_group_id UUID, check_user_id UUID)
 RETURNS BOOLEAN AS $$
   SELECT EXISTS (
+    SELECT 1 FROM groups
+    WHERE id = check_group_id AND created_by = check_user_id
+  ) OR EXISTS (
     SELECT 1 FROM group_members
     WHERE group_id = check_group_id
       AND user_id = check_user_id
@@ -279,11 +303,13 @@ CREATE POLICY "profiles_update_own" ON profiles FOR UPDATE USING (auth.uid() = i
 
 -- GROUPS POLICIES
 DROP POLICY IF EXISTS "groups_select_members" ON groups;
-CREATE POLICY "groups_select_members" ON groups FOR SELECT USING (
-  auth.uid() IS NOT NULL AND (
+DROP POLICY IF EXISTS "groups_select_public_or_members" ON groups;
+CREATE POLICY "groups_select_public_or_members" ON groups FOR SELECT USING (
+  invite_code IS NOT NULL OR
+  (auth.uid() IS NOT NULL AND (
     is_group_member(id, auth.uid()) OR
     created_by = auth.uid()
-  )
+  ))
 );
 
 DROP POLICY IF EXISTS "groups_insert_auth" ON groups;
@@ -299,23 +325,78 @@ CREATE POLICY "groups_delete_admin" ON groups FOR DELETE USING (is_group_admin(i
 DROP POLICY IF EXISTS "group_members_select" ON group_members;
 CREATE POLICY "group_members_select" ON group_members FOR SELECT USING (
   is_group_member(group_id, auth.uid()) OR
-  user_id = auth.uid()
+  user_id = auth.uid() OR
+  EXISTS (SELECT 1 FROM groups WHERE id = group_id AND created_by = auth.uid())
 );
 
 DROP POLICY IF EXISTS "group_members_insert" ON group_members;
 CREATE POLICY "group_members_insert" ON group_members FOR INSERT WITH CHECK (
   is_group_admin(group_id, auth.uid()) OR
-  user_id = auth.uid()
+  user_id = auth.uid() OR
+  EXISTS (SELECT 1 FROM groups WHERE id = group_id AND created_by = auth.uid())
 );
 
 DROP POLICY IF EXISTS "group_members_update_admin" ON group_members;
-CREATE POLICY "group_members_update_admin" ON group_members FOR UPDATE USING (is_group_admin(group_id, auth.uid()));
+CREATE POLICY "group_members_update_admin" ON group_members FOR UPDATE USING (
+  is_group_admin(group_id, auth.uid()) OR
+  EXISTS (SELECT 1 FROM groups WHERE id = group_id AND created_by = auth.uid())
+);
 
 DROP POLICY IF EXISTS "group_members_delete_admin_or_self" ON group_members;
 CREATE POLICY "group_members_delete_admin_or_self" ON group_members FOR DELETE USING (
   is_group_admin(group_id, auth.uid()) OR
-  user_id = auth.uid()
+  user_id = auth.uid() OR
+  EXISTS (SELECT 1 FROM groups WHERE id = group_id AND created_by = auth.uid())
 );
+
+-- RPC FUNCTION: GET GROUP BY INVITE
+CREATE OR REPLACE FUNCTION get_group_by_invite(invite_code_param TEXT)
+RETURNS TABLE (
+  id UUID,
+  name TEXT,
+  description TEXT,
+  invite_code TEXT,
+  currency TEXT,
+  created_by UUID,
+  created_at TIMESTAMPTZ
+) AS $$
+  SELECT g.id, g.name, g.description, g.invite_code, g.currency, g.created_by, g.created_at
+  FROM groups g
+  WHERE g.invite_code = invite_code_param
+  LIMIT 1;
+$$ LANGUAGE sql SECURITY DEFINER;
+
+-- RPC FUNCTION: JOIN GROUP BY INVITE
+CREATE OR REPLACE FUNCTION join_group_by_invite(invite_code_param TEXT)
+RETURNS TABLE (
+  group_id UUID,
+  group_name TEXT
+) AS $$
+DECLARE
+  target_group_id UUID;
+  target_group_name TEXT;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'You must be signed in to join a group.';
+  END IF;
+
+  SELECT g.id, g.name INTO target_group_id, target_group_name
+  FROM groups g
+  WHERE g.invite_code = invite_code_param
+  LIMIT 1;
+
+  IF target_group_id IS NULL THEN
+    RAISE EXCEPTION 'Group with this invite code was not found or has expired.';
+  END IF;
+
+  INSERT INTO group_members (group_id, user_id, role, status)
+  VALUES (target_group_id, auth.uid(), 'member', 'active')
+  ON CONFLICT (group_id, user_id)
+  DO UPDATE SET status = 'active';
+
+  RETURN QUERY SELECT target_group_id, target_group_name;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- EXPENSES POLICIES (Strictly Multi-Tenant)
 DROP POLICY IF EXISTS "expenses_select_group_members" ON expenses;

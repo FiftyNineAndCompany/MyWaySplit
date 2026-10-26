@@ -62,15 +62,29 @@ export default function ParticipantManager({
         localStorage.setItem(storedKey, JSON.stringify(updated));
 
         try {
-          await supabase
+          const payloadWithGroup = {
+            id: newParticipant.id,
+            name: newParticipant.name,
+            upi_id: newParticipant.upi_id || null,
+            phone: newParticipant.phone || null,
+            group_id: activeGroupId !== 'default' ? activeGroupId : null,
+          };
+          const { error: insErr } = await supabase
             .from('participants')
-            .insert([{
+            .insert([payloadWithGroup]);
+
+          if (insErr && insErr.code === 'PGRST204') {
+            // Column group_id not present yet in schema cache, fallback without it
+            await supabase.from('participants').insert([{
               id: newParticipant.id,
               name: newParticipant.name,
               upi_id: newParticipant.upi_id || null,
               phone: newParticipant.phone || null,
             }]);
-        } catch (_) {}
+          }
+        } catch (dbEx) {
+          console.warn('Participant DB insert note:', dbEx);
+        }
 
         showToast(`Added ${name.trim()} to sheet!`, 'success');
       }

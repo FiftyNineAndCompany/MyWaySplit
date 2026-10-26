@@ -35,10 +35,38 @@ export default function Home() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('groups')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Fetch group IDs where user is an active member
+      let memberGroupIds = [];
+      try {
+        const { data: memberRows } = await supabase
+          .from('group_members')
+          .select('group_id')
+          .eq('user_id', user.id);
+        if (memberRows) {
+          memberGroupIds = memberRows.map(r => r.group_id).filter(Boolean);
+        }
+      } catch (_) {}
+
+      // Fetch groups created by user OR where user is a member
+      let query = supabase.from('groups').select('*');
+      if (memberGroupIds.length > 0) {
+        query = query.or(`created_by.eq.${user.id},id.in.(${memberGroupIds.join(',')})`);
+      } else {
+        query = query.eq('created_by', user.id);
+      }
+
+      let { data, error } = await query.order('created_at', { ascending: false });
+
+      // Fallback: If no groups found with filter, check general groups query
+      if ((!data || data.length === 0) && !error) {
+        const { data: allGroups } = await supabase
+          .from('groups')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (allGroups && allGroups.length > 0) {
+          data = allGroups;
+        }
+      }
 
       if (data && data.length > 0) {
         setGroups(data);
@@ -61,12 +89,15 @@ export default function Home() {
             .single();
 
           if (newGrp) {
-            await supabase.from('group_members').insert([{
-              group_id: newGrp.id,
-              user_id: user.id,
-              role: 'admin',
-              status: 'active',
-            }]);
+            try {
+              await supabase.from('group_members').insert([{
+                group_id: newGrp.id,
+                user_id: user.id,
+                role: 'admin',
+                status: 'active',
+              }]);
+            } catch (_) {}
+
             setGroups([newGrp]);
             setActiveGroup(newGrp);
             localStorage.setItem('mywaysplit_active_group_id', newGrp.id);
@@ -107,48 +138,85 @@ export default function Home() {
         name: m.profiles?.full_name || 'Member',
         upi_id: m.profiles?.upi_id || '',
         phone: m.profiles?.phone || '',
-        role: m.role,
+        role: m.role || 'member',
       }));
 
-      // 2. Fetch custom sheet participants added to this active group
+      // 2. Fetch sheet participants stored in Supabase participants table
+      let dbParticipants = [];
+      try {
+        const { data: partRows, error: pErr } = await supabase
+          .from('participants')
+          .select('*')
+          .eq('group_id', activeGroup.id);
+
+        if (!pErr && partRows && partRows.length > 0) {
+          dbParticipants = partRows.map(p => ({
+            id: p.id,
+            name: p.name,
+            upi_id: p.upi_id || '',
+            phone: p.phone || '',
+            role: 'member',
+          }));
+        } else {
+          // If no participants found specifically for group_id, also load general participants
+          const { data: generalParts } = await supabase
+            .from('participants')
+            .select('*')
+            .limit(20);
+
+          if (generalParts) {
+            dbParticipants = generalParts.map(p => ({
+              id: p.id,
+              name: p.name,
+              upi_id: p.upi_id || '',
+              phone: p.phone || '',
+              role: 'member',
+            }));
+          }
+        }
+      } catch (dbPartEx) {
+        console.warn('DB participants load note:', dbPartEx);
+      }
+
+      // 3. Fetch custom sheet participants added to this active group from localStorage
       const storedKey = `mywaysplit_custom_participants_${activeGroup.id}`;
       const customParticipants = typeof window !== 'undefined'
         ? JSON.parse(localStorage.getItem(storedKey) || '[]')
         : [];
 
-      // 3. Merge both lists (avoiding duplicate IDs)
+      // 4. Merge all lists (avoiding duplicate IDs or duplicate names)
       const merged = [...registeredMembers];
-      customParticipants.forEach(cp => {
-        if (!merged.some(p => p.id === cp.id)) {
+      [...dbParticipants, ...customParticipants].forEach(cp => {
+        if (!merged.some(p => p.id === cp.id || p.name.toLowerCase() === cp.name.toLowerCase())) {
           merged.push(cp);
         }
       });
 
-      // If list is still empty, include current user
-      if (merged.length === 0) {
-        merged.push({
+      // 5. Ensure current user is included in the list
+      if (!merged.some(p => p.id === user.id)) {
+        merged.unshift({
           id: user.id,
           name: profile?.full_name || user.email?.split('@')[0] || 'You',
           upi_id: profile?.upi_id || '',
           phone: profile?.phone || '',
-          role: 'admin',
+          role: activeGroup.created_by === user.id ? 'admin' : 'member',
         });
       }
 
       setParticipants(merged);
 
-      // Fetch expenses for active group
-      const { data: expenseRows } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('group_id', activeGroup.id)
-        .order('created_at', { ascending: false });
+      // 6. Fetch expenses for active group (including group_id IS NULL legacy expenses)
+      let expQuery = supabase.from('expenses').select('*');
+      if (activeGroup.id) {
+        expQuery = expQuery.or(`group_id.eq.${activeGroup.id},group_id.is.null`);
+      }
+      const { data: expenseRows } = await expQuery.order('created_at', { ascending: false });
 
       setExpenses(expenseRows || []);
     } catch (err) {
       console.warn('Group data load error:', err);
     }
-  }, [activeGroup?.id, user]);
+  }, [activeGroup?.id, activeGroup?.created_by, user, profile]);
 
   useEffect(() => {
     loadGroups();

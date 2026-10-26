@@ -113,7 +113,7 @@ export default function ExpenseList({
               ? new Date(exp.created_at).toLocaleDateString('en-IN', {
                   day: 'numeric',
                   month: 'short',
-                  year: new Date(exp.created_at).getFullYear() !== 2026 ? 'numeric' : undefined,
+                  year: new Date(exp.created_at).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
                 })
               : 'Recently';
 

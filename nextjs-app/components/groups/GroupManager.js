@@ -97,91 +97,139 @@ export default function GroupManager({
 
     try {
       const cleanEmail = memberEmail.trim().toLowerCase();
+      const cleanName = memberName.trim() || cleanEmail.split('@')[0];
 
-      // Find registered profile for invited user (use limit(1) to avoid 406 errors)
-      const { data: existingProfiles, error: searchErr } = await supabase
-        .from('profiles')
-        .select('id, full_name, email')
-        .ilike('email', cleanEmail)
-        .limit(1);
-
-      if (searchErr) throw searchErr;
-
-      const existingProfile = existingProfiles && existingProfiles[0];
-
-      if (!existingProfile) {
-        showToast(
-          `"${cleanEmail}" is not registered yet. Use "Share Link" to send them the invite so they can create an account and join!`,
-          'warning'
-        );
-        return;
-      }
-
-      const targetUserId = existingProfile.id;
-
-      // Check if user is already a member of this group
-      const { data: existingMember } = await supabase
-        .from('group_members')
-        .select('id')
-        .eq('group_id', activeGroup.id)
-        .eq('user_id', targetUserId)
-        .maybeSingle();
-
-      if (existingMember) {
-        showToast(`${existingProfile.full_name || cleanEmail} is already a member of ${activeGroup.name}.`, 'info');
-        setIsAddingMember(false);
-        return;
-      }
-
-      // Add to group_members in Supabase
-      const { error: insertErr } = await supabase
-        .from('group_members')
-        .insert([{
-          group_id: activeGroup.id,
-          user_id: targetUserId,
-          role: 'member',
-          status: 'active',
-        }]);
-
-      if (insertErr) throw insertErr;
-
-      // Send In-App Notification
+      // 1. Check if user already registered with this email
+      let existingProfile = null;
       try {
-        await supabase
-          .from('notifications')
+        const { data: existingProfiles, error: searchErr } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, phone, upi_id')
+          .ilike('email', cleanEmail)
+          .limit(1);
+
+        if (!searchErr && existingProfiles && existingProfiles.length > 0) {
+          existingProfile = existingProfiles[0];
+        }
+      } catch (searchEx) {
+        console.warn('Profile search note:', searchEx);
+      }
+
+      if (existingProfile) {
+        const targetUserId = existingProfile.id;
+
+        // Check if user is already a member of this group
+        const { data: existingMember } = await supabase
+          .from('group_members')
+          .select('id')
+          .eq('group_id', activeGroup.id)
+          .eq('user_id', targetUserId)
+          .maybeSingle();
+
+        if (existingMember) {
+          showToast(`${existingProfile.full_name || cleanEmail} is already a member of ${activeGroup.name}.`, 'info');
+          setIsAddingMember(false);
+          return;
+        }
+
+        // Add to group_members in Supabase
+        const { error: insertErr } = await supabase
+          .from('group_members')
           .insert([{
-            user_id: targetUserId,
             group_id: activeGroup.id,
-            type: 'group_invite',
-            title: `Added to ${activeGroup.name}`,
-            message: `${profile?.full_name || 'Admin'} added you to the expense group "${activeGroup.name}".`,
+            user_id: targetUserId,
+            role: 'member',
+            status: 'active',
           }]);
-      } catch (notifErr) {
-        console.warn('In-app notification note:', notifErr);
+
+        if (insertErr) {
+          console.warn('Group member insert warning:', insertErr);
+        }
+
+        // Also add to sheet participants table so they are immediately selectable in expense forms
+        try {
+          await supabase
+            .from('participants')
+            .upsert([{
+              id: targetUserId,
+              name: existingProfile.full_name || cleanName,
+              upi_id: existingProfile.upi_id || null,
+              phone: existingProfile.phone || null,
+              group_id: activeGroup.id,
+            }], { onConflict: 'id' });
+        } catch (_) {}
+
+        // Send In-App Notification
+        try {
+          await supabase
+            .from('notifications')
+            .insert([{
+              user_id: targetUserId,
+              group_id: activeGroup.id,
+              type: 'group_invite',
+              title: `Added to ${activeGroup.name}`,
+              message: `${profile?.full_name || 'A friend'} added you to the expense group "${activeGroup.name}".`,
+            }]);
+        } catch (notifErr) {
+          console.warn('In-app notification note:', notifErr);
+        }
+
+        showToast(`Added ${existingProfile.full_name || cleanEmail} to ${activeGroup.name}!`, 'success');
+      } else {
+        // Friend is not registered yet: Add them as a custom sheet participant immediately
+        const newParticipantId = crypto.randomUUID();
+        const newParticipant = {
+          id: newParticipantId,
+          name: cleanName,
+          email: cleanEmail,
+          upi_id: '',
+          phone: '',
+          role: 'member',
+          group_id: activeGroup.id,
+        };
+
+        // Save to Supabase participants table
+        try {
+          await supabase
+            .from('participants')
+            .insert([{
+              id: newParticipant.id,
+              name: newParticipant.name,
+              upi_id: null,
+              phone: null,
+              group_id: activeGroup.id,
+            }]);
+        } catch (dbErr) {
+          console.warn('DB participant insert note:', dbErr);
+        }
+
+        // Save to active group localStorage
+        const storedKey = `mywaysplit_custom_participants_${activeGroup.id}`;
+        const existing = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(storedKey) || '[]') : [];
+        if (!existing.some(p => p.id === newParticipant.id || p.name.toLowerCase() === cleanName.toLowerCase())) {
+          existing.push(newParticipant);
+          localStorage.setItem(storedKey, JSON.stringify(existing));
+        }
+
+        // Copy the invite link to clipboard automatically
+        if (activeGroup?.invite_code) {
+          const origin = typeof window !== 'undefined' ? window.location.origin : '';
+          const inviteUrl = `${origin}/invite/${activeGroup.invite_code}`;
+          try {
+            await navigator.clipboard.writeText(inviteUrl);
+            showToast(`Added ${cleanName} to sheet! Invite link copied to clipboard.`, 'success');
+          } catch (_) {
+            showToast(`Added ${cleanName} to sheet! Use "Share Link" to invite them.`, 'success');
+          }
+        } else {
+          showToast(`Added ${cleanName} to sheet!`, 'success');
+        }
       }
 
-      // Trigger Real-time Push Notification via OneSignal API if configured
-      try {
-        await fetch('/api/notifications', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            recipientIds: [targetUserId],
-            heading: `👥 Added to ${activeGroup.name}`,
-            content: `${profile?.full_name || 'A friend'} added you to "${activeGroup.name}". View shared expenses now.`,
-            senderId: user?.id,
-            type: 'system',
-          }),
-        });
-      } catch (pushErr) {
-        console.warn('Push notification dispatch note:', pushErr);
-      }
-
-      showToast(`Added ${existingProfile.full_name || cleanEmail} to ${activeGroup.name}!`, 'success');
       setMemberEmail('');
       setMemberName('');
       setIsAddingMember(false);
-      onRefreshGroups();
+      if (onRefreshGroups) onRefreshGroups();
     } catch (err) {
       console.error('Error adding member:', err);
       showToast(err.message || 'Could not add member.', 'error');
@@ -237,7 +285,7 @@ export default function GroupManager({
             </button>
           )}
 
-          {isAdmin && (
+          {activeGroup && (
             <button
               type="button"
               onClick={() => setIsAddingMember(true)}
@@ -346,23 +394,33 @@ export default function GroupManager({
                   className="input"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Enter their registered email to add them immediately.
+                  If registered, they'll be linked directly. If new, they'll be added to the sheet and you can share the link.
                 </p>
               </div>
 
               {activeGroup?.invite_code && (
-                <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-100 flex items-center justify-between gap-2">
+                <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                   <div className="text-[11px] text-indigo-900 leading-snug">
-                    <span className="font-semibold">Friend not registered yet?</span>
-                    <p className="text-indigo-600/80">Copy the invite link and share it via WhatsApp.</p>
+                    <span className="font-semibold">Share Group Invite:</span>
+                    <p className="text-indigo-600/80">Friends can join with one tap via invite link or WhatsApp.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={copyInviteLink}
-                    className="btn bg-white hover:bg-indigo-100 text-indigo-700 font-bold text-xs py-1.5 px-3 border border-indigo-200 shadow-sm shrink-0"
-                  >
-                    🔗 Copy Link
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                    <button
+                      type="button"
+                      onClick={copyInviteLink}
+                      className="btn bg-white hover:bg-indigo-100 text-indigo-700 font-bold text-xs py-1.5 px-3 border border-indigo-200 shadow-sm shrink-0"
+                    >
+                      🔗 Copy Link
+                    </button>
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(`Join our expense sheet "${activeGroup?.name || 'MyWaySplit'}" on MyWaySplit: ${typeof window !== 'undefined' ? window.location.origin : ''}/invite/${activeGroup?.invite_code || ''}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-1.5 px-3 shadow-sm shrink-0"
+                    >
+                      💬 WhatsApp
+                    </a>
+                  </div>
                 </div>
               )}
 
@@ -379,7 +437,7 @@ export default function GroupManager({
                   disabled={loading}
                   className="btn btn-primary text-xs py-2 px-5 font-semibold"
                 >
-                  {loading ? 'Adding...' : 'Add & Send Notification'}
+                  {loading ? 'Adding...' : 'Add Member to Sheet'}
                 </button>
               </div>
             </form>
