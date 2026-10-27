@@ -202,6 +202,7 @@ CREATE TABLE IF NOT EXISTS loan_leads (
 -- ============================================================
 
 -- Function A: Safely preview group info by invite code (unauthenticated or new user)
+DROP FUNCTION IF EXISTS get_group_by_invite(TEXT);
 CREATE OR REPLACE FUNCTION get_group_by_invite(invite_code_param TEXT)
 RETURNS TABLE (
   id UUID,
@@ -229,6 +230,8 @@ RETURNS TABLE (
 $$ LANGUAGE sql SECURITY DEFINER;
 
 -- Function B: Join group via invite code with user-chosen name and optional UPI
+DROP FUNCTION IF EXISTS join_group_by_invite(TEXT);
+DROP FUNCTION IF EXISTS join_group_by_invite(TEXT, TEXT, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION join_group_by_invite(
   invite_code_param TEXT,
   display_name_param TEXT DEFAULT NULL,

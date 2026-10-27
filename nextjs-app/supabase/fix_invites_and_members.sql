@@ -49,6 +49,7 @@ ALTER TABLE participants ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT false;
 
 -- 4. RPC: GET GROUP BY INVITE CODE (SECURITY DEFINER)
+DROP FUNCTION IF EXISTS get_group_by_invite(TEXT);
 CREATE OR REPLACE FUNCTION get_group_by_invite(invite_code_param TEXT)
 RETURNS TABLE (
   id UUID,
@@ -76,6 +77,8 @@ RETURNS TABLE (
 $$ LANGUAGE sql SECURITY DEFINER;
 
 -- 5. RPC: JOIN GROUP BY INVITE CODE WITH DISPLAY NAME
+DROP FUNCTION IF EXISTS join_group_by_invite(TEXT);
+DROP FUNCTION IF EXISTS join_group_by_invite(TEXT, TEXT, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION join_group_by_invite(
   invite_code_param TEXT,
   display_name_param TEXT DEFAULT NULL,
