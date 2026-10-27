@@ -63,7 +63,6 @@ export default function GroupManager({
         await supabase
           .from('participants')
           .insert([{
-            id: user.id,
             user_id: user.id,
             group_id: groupData.id,
             name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admin',

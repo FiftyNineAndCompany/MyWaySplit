@@ -100,8 +100,9 @@ export default function ExpenseList({
       ) : (
         <ul className="divide-y divide-slate-100 max-h-[460px] overflow-y-auto pr-1">
           {displayedExpenses.map(exp => {
-            const payer = participants.find(p => p.id === exp.paid_by);
-            const payerName = payer ? payer.name : 'Participant';
+            const payer = participants.find(p => p.id === exp.paid_by || p.user_id === exp.paid_by);
+            const isUserPayer = exp.paid_by === currentUser || (payer && (payer.user_id === currentUser || payer.id === currentUser));
+            const payerName = payer ? (isUserPayer ? `${payer.name} (You)` : payer.name) : (isUserPayer ? 'You' : 'Participant');
             const catInfo = EXPENSE_CATEGORIES.find(c => c.id === exp.category) || EXPENSE_CATEGORIES[EXPENSE_CATEGORIES.length - 1];
 
             // Determine split count

@@ -6,9 +6,10 @@ import { useToast } from '@/components/layout/Toast';
 import { EXPENSE_CATEGORIES } from '@/lib/splitEngine';
 
 export default function ExpenseForm({
-  participants,
+  participants = [],
   activeGroup,
   activeGroupId,
+  currentUser,
   onDataChange,
 }) {
   const { showToast } = useToast();
@@ -21,15 +22,25 @@ export default function ExpenseForm({
   const [loading, setLoading] = useState(false);
 
   // Inclusions/Exclusions: Array of participant IDs who share this expense
-  // Default is all participants
   const [includedMemberIds, setIncludedMemberIds] = useState([]);
 
-  // Sync included members whenever participants list changes
+  // Auto-default payer to current user or first participant, and sync included members
   useEffect(() => {
-    if (participants.length > 0 && includedMemberIds.length === 0) {
-      setIncludedMemberIds(participants.map(p => p.id));
+    if (participants.length > 0) {
+      if (!payerId || !participants.some(p => p.id === payerId)) {
+        const userPart = participants.find(p => p.user_id === currentUser || p.id === currentUser);
+        if (userPart) {
+          setPayerId(userPart.id);
+        } else if (participants[0]) {
+          setPayerId(participants[0].id);
+        }
+      }
+
+      if (includedMemberIds.length === 0) {
+        setIncludedMemberIds(participants.map(p => p.id));
+      }
     }
-  }, [participants, includedMemberIds.length]);
+  }, [participants, currentUser, payerId, includedMemberIds.length]);
 
   function toggleMemberInclusion(id) {
     if (includedMemberIds.includes(id)) {
@@ -60,10 +71,18 @@ export default function ExpenseForm({
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!currentGroupId) {
+      return showToast('Please select or create an expense group first.', 'error');
+    }
+
     const parsedAmount = parseFloat(amount);
 
-    if (!description.trim() || isNaN(parsedAmount) || parsedAmount <= 0 || !payerId) {
-      return showToast('Please fill all required fields correctly.', 'error');
+    if (!description.trim() || isNaN(parsedAmount) || parsedAmount <= 0) {
+      return showToast('Please enter a valid description and positive amount.', 'error');
+    }
+
+    if (!payerId) {
+      return showToast('Please select who paid for this expense.', 'error');
     }
 
     if (includedMemberIds.length === 0) {
@@ -78,7 +97,7 @@ export default function ExpenseForm({
         paid_by: payerId,
         category,
         split_among: includedMemberIds,
-        group_id: currentGroupId || null,
+        group_id: currentGroupId,
         is_archived: false,
       };
 
@@ -98,28 +117,10 @@ export default function ExpenseForm({
       }
 
       resetForm();
-      onDataChange();
+      if (onDataChange) await onDataChange();
     } catch (err) {
-      console.warn('Supabase expense save warning:', err);
-      // Fallback local save if Supabase not fully connected
-      const stored = localStorage.getItem('mywaysplit_expenses');
-      const list = stored ? JSON.parse(stored) : [];
-      const newExp = {
-        id: editId || `exp-${Date.now()}`,
-        description: description.trim(),
-        amount: parsedAmount,
-        paid_by: payerId,
-        category,
-        split_among: includedMemberIds,
-        created_at: new Date().toISOString(),
-        is_archived: false,
-      };
-
-      const updated = editId ? list.map(item => item.id === editId ? newExp : item) : [newExp, ...list];
-      localStorage.setItem('mywaysplit_expenses', JSON.stringify(updated));
-      showToast('Expense recorded locally!', 'success');
-      resetForm();
-      onDataChange();
+      console.error('Supabase expense save error:', err);
+      showToast(err.message || 'Failed to record expense. Please check group permissions.', 'error');
     } finally {
       setLoading(false);
     }
@@ -129,8 +130,10 @@ export default function ExpenseForm({
     setEditId(null);
     setDescription('');
     setAmount('');
-    setPayerId('');
     setCategory('food');
+    // Re-default payer to current user
+    const userPart = participants.find(p => p.user_id === currentUser || p.id === currentUser);
+    setPayerId(userPart ? userPart.id : (participants[0]?.id || ''));
     setIncludedMemberIds(participants.map(p => p.id));
   }
 

@@ -178,47 +178,179 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 6. STRICT MULTI-TENANT RLS POLICIES
+-- 6. SECURITY HELPER FUNCTIONS
+CREATE OR REPLACE FUNCTION is_group_member(check_group_id UUID, check_user_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM groups
+    WHERE id = check_group_id AND (created_by = check_user_id OR created_by IS NULL)
+  ) OR EXISTS (
+    SELECT 1 FROM group_members
+    WHERE group_id = check_group_id
+      AND user_id = check_user_id
+      AND status = 'active'
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+CREATE OR REPLACE FUNCTION is_group_admin(check_group_id UUID, check_user_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM groups
+    WHERE id = check_group_id AND (created_by = check_user_id OR created_by IS NULL)
+  ) OR EXISTS (
+    SELECT 1 FROM group_members
+    WHERE group_id = check_group_id
+      AND user_id = check_user_id
+      AND role = 'admin'
+      AND status = 'active'
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- 7. STRICT MULTI-TENANT RLS POLICIES
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "groups_select_members" ON groups;
 DROP POLICY IF EXISTS "groups_select_public_or_members" ON groups;
 CREATE POLICY "groups_select_members" ON groups FOR SELECT USING (
   auth.uid() IS NOT NULL AND (
     created_by = auth.uid() OR
+    created_by IS NULL OR
     is_group_member(id, auth.uid())
   )
 );
 
+DROP POLICY IF EXISTS "groups_insert_auth" ON groups;
+CREATE POLICY "groups_insert_auth" ON groups FOR INSERT WITH CHECK (
+  auth.uid() IS NOT NULL
+);
+
+DROP POLICY IF EXISTS "groups_update_admin" ON groups;
+CREATE POLICY "groups_update_admin" ON groups FOR UPDATE USING (
+  auth.uid() IS NOT NULL AND (
+    created_by = auth.uid() OR
+    created_by IS NULL OR
+    is_group_admin(id, auth.uid())
+  )
+);
+
+-- GROUP MEMBERS POLICIES
+ALTER TABLE group_members ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "group_members_select" ON group_members;
+CREATE POLICY "group_members_select" ON group_members FOR SELECT USING (
+  auth.uid() IS NOT NULL
+);
+
+DROP POLICY IF EXISTS "group_members_insert" ON group_members;
+CREATE POLICY "group_members_insert" ON group_members FOR INSERT WITH CHECK (
+  auth.uid() IS NOT NULL
+);
+
+DROP POLICY IF EXISTS "group_members_update" ON group_members;
+CREATE POLICY "group_members_update" ON group_members FOR UPDATE USING (
+  auth.uid() IS NOT NULL
+);
+
+-- PARTICIPANTS POLICIES
 ALTER TABLE participants ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "participants_select" ON participants;
 CREATE POLICY "participants_select" ON participants FOR SELECT USING (
-  group_id IS NOT NULL AND (
+  auth.uid() IS NOT NULL AND (
+    group_id IS NULL OR
     is_group_member(group_id, auth.uid()) OR
-    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND created_by = auth.uid())
+    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND (created_by = auth.uid() OR created_by IS NULL))
   )
 );
 
 DROP POLICY IF EXISTS "participants_insert" ON participants;
 CREATE POLICY "participants_insert" ON participants FOR INSERT WITH CHECK (
-  group_id IS NOT NULL AND (
+  auth.uid() IS NOT NULL AND (
+    group_id IS NULL OR
     is_group_member(group_id, auth.uid()) OR
-    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND created_by = auth.uid())
+    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND (created_by = auth.uid() OR created_by IS NULL))
   )
 );
 
+DROP POLICY IF EXISTS "participants_update" ON participants;
+CREATE POLICY "participants_update" ON participants FOR UPDATE USING (
+  auth.uid() IS NOT NULL AND (
+    group_id IS NULL OR
+    is_group_member(group_id, auth.uid()) OR
+    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND (created_by = auth.uid() OR created_by IS NULL))
+  )
+);
+
+DROP POLICY IF EXISTS "participants_delete" ON participants;
+CREATE POLICY "participants_delete" ON participants FOR DELETE USING (
+  auth.uid() IS NOT NULL AND (
+    group_id IS NULL OR
+    is_group_member(group_id, auth.uid()) OR
+    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND (created_by = auth.uid() OR created_by IS NULL))
+  )
+);
+
+-- EXPENSES POLICIES
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "expenses_select_group_members" ON expenses;
 CREATE POLICY "expenses_select_group_members" ON expenses FOR SELECT USING (
-  group_id IS NOT NULL AND (
+  auth.uid() IS NOT NULL AND (
+    group_id IS NULL OR
     is_group_member(group_id, auth.uid()) OR
-    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND created_by = auth.uid())
+    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND (created_by = auth.uid() OR created_by IS NULL))
   )
 );
 
 DROP POLICY IF EXISTS "expenses_insert_group_members" ON expenses;
 CREATE POLICY "expenses_insert_group_members" ON expenses FOR INSERT WITH CHECK (
-  group_id IS NOT NULL AND (
+  auth.uid() IS NOT NULL AND (
+    group_id IS NULL OR
     is_group_member(group_id, auth.uid()) OR
-    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND created_by = auth.uid())
+    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND (created_by = auth.uid() OR created_by IS NULL))
   )
 );
+
+DROP POLICY IF EXISTS "expenses_update_creator_or_admin" ON expenses;
+CREATE POLICY "expenses_update_creator_or_admin" ON expenses FOR UPDATE USING (
+  auth.uid() IS NOT NULL AND (
+    group_id IS NULL OR
+    is_group_member(group_id, auth.uid()) OR
+    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND (created_by = auth.uid() OR created_by IS NULL))
+  )
+);
+
+DROP POLICY IF EXISTS "expenses_delete_creator_or_admin" ON expenses;
+CREATE POLICY "expenses_delete_creator_or_admin" ON expenses FOR DELETE USING (
+  auth.uid() IS NOT NULL AND (
+    group_id IS NULL OR
+    is_group_member(group_id, auth.uid()) OR
+    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND (created_by = auth.uid() OR created_by IS NULL))
+  )
+);
+
+-- 8. AUTO-BACKFILL LEGACY GROUPS & ASSIGN ADMIN
+-- Assign any groups with null creator to the first active user profile
+DO $$
+DECLARE
+  first_user_id UUID;
+BEGIN
+  SELECT id INTO first_user_id FROM profiles ORDER BY created_at ASC LIMIT 1;
+  IF first_user_id IS NOT NULL THEN
+    UPDATE groups SET created_by = first_user_id WHERE created_by IS NULL;
+
+    -- Ensure admin membership in group_members
+    INSERT INTO group_members (group_id, user_id, role, status)
+    SELECT g.id, first_user_id, 'admin', 'active'
+    FROM groups g
+    ON CONFLICT (group_id, user_id) DO UPDATE SET status = 'active';
+
+    -- Ensure admin participant row
+    INSERT INTO participants (group_id, user_id, name, upi_id, phone)
+    SELECT g.id, p.id, COALESCE(p.full_name, split_part(p.email, '@', 1), 'Admin'), p.upi_id, p.phone
+    FROM groups g
+    CROSS JOIN profiles p
+    WHERE p.id = first_user_id
+      AND NOT EXISTS (
+        SELECT 1 FROM participants pt 
+        WHERE pt.group_id = g.id AND (pt.user_id = p.id OR pt.id = p.id)
+      );
+  END IF;
+END $$;
+

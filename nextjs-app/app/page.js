@@ -74,7 +74,28 @@ export default function Home() {
     }
 
     try {
-      // 1. Fetch participants strictly for this active group from Supabase
+      // 1. Ensure user is recorded in group_members for active group
+      if (user?.id && activeGroup?.id) {
+        const { data: gmData } = await supabase
+          .from('group_members')
+          .select('id')
+          .eq('group_id', activeGroup.id)
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (!gmData) {
+          await supabase.from('group_members').upsert([
+            {
+              group_id: activeGroup.id,
+              user_id: user.id,
+              role: activeGroup.created_by === user.id || !activeGroup.created_by ? 'admin' : 'member',
+              status: 'active',
+            }
+          ], { onConflict: 'group_id,user_id' });
+        }
+      }
+
+      // 2. Fetch participants strictly for this active group from Supabase
       const { data: partRows, error: pErr } = await supabase
         .from('participants')
         .select('*')
@@ -91,32 +112,59 @@ export default function Home() {
         }));
       }
 
-      // 2. Ensure current user is in the list
+      // 3. Ensure current user has a real participant record in the database
       const currentUserName = profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'You';
-      if (!list.some(p => p.id === user.id || p.user_id === user.id)) {
-        list.unshift({
-          id: user.id,
-          user_id: user.id,
-          name: currentUserName,
-          upi_id: profile?.upi_id || '',
-          phone: profile?.phone || '',
-        });
+      const existingUserPart = list.find(p => p.user_id === user.id || p.id === user.id);
+
+      if (!existingUserPart) {
+        const { data: newPartRow, error: npErr } = await supabase
+          .from('participants')
+          .insert([{
+            group_id: activeGroup.id,
+            user_id: user.id,
+            name: currentUserName,
+            upi_id: profile?.upi_id || null,
+            phone: profile?.phone || null,
+          }])
+          .select()
+          .maybeSingle();
+
+        if (!npErr && newPartRow) {
+          list.unshift({
+            id: newPartRow.id,
+            user_id: user.id,
+            name: newPartRow.name,
+            upi_id: newPartRow.upi_id || '',
+            phone: newPartRow.phone || '',
+          });
+        } else {
+          list.unshift({
+            id: user.id,
+            user_id: user.id,
+            name: currentUserName,
+            upi_id: profile?.upi_id || '',
+            phone: profile?.phone || '',
+          });
+        }
       }
 
       setParticipants(list);
 
-      // 3. Fetch expenses strictly for active group
-      const { data: expenseRows } = await supabase
+      // 4. Fetch expenses strictly for active group
+      const { data: expenseRows, error: expErr } = await supabase
         .from('expenses')
         .select('*')
         .eq('group_id', activeGroup.id)
         .order('created_at', { ascending: false });
 
+      if (expErr) {
+        console.warn('Expenses fetch note:', expErr);
+      }
       setExpenses(expenseRows || []);
     } catch (err) {
       console.warn('Group data load error:', err);
     }
-  }, [activeGroup?.id, user, profile]);
+  }, [activeGroup?.id, activeGroup?.created_by, user, profile]);
 
   useEffect(() => {
     loadGroups();
@@ -265,6 +313,7 @@ export default function Home() {
               participants={participants}
               activeGroup={activeGroup}
               activeGroupId={activeGroup?.id}
+              currentUser={currentUserId}
               onDataChange={loadGroupData}
             />
           </div>

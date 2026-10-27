@@ -36,7 +36,7 @@ export default function SettlementPlan({ participants, expenses, currentUser, ac
       ) : (
         <div className="space-y-3">
           {settlements.map((s, idx) => {
-            const isUserDebtor = currentUser === s.from.id;
+            const isUserDebtor = currentUser === s.from.id || currentUser === s.from.user_id;
 
             return (
               <div
