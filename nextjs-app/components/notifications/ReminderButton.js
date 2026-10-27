@@ -4,19 +4,28 @@ import { useState } from 'react';
 import { useToast } from '@/components/layout/Toast';
 
 /**
- * Push Notification Reminder Button.
- * Sends a push reminder to a debtor via the API route (which calls OneSignal REST API v2).
- * Only shown to creditors (the person being owed money).
+ * Targeted Push Notification Reminder Button.
+ * Triggers OneSignal push notification to the specific debtor's device
+ * and logs an in-app reminder to the debtor's account.
  */
-export default function ReminderButton({ debtorId, debtorName, creditorName, amount, currentUser }) {
+export default function ReminderButton({
+  debtorId,
+  debtorName,
+  creditorName,
+  amount,
+  currentUser,
+  groupId,
+}) {
   const { showToast } = useToast();
   const [sending, setSending] = useState(false);
 
-  // Only show the button if the current user is NOT the debtor (i.e., they're owed money)
-  // So the creditor can send a reminder to the debtor
+  // Only show the button if the current user is NOT the debtor (i.e., creditor is owed money)
   if (!currentUser || currentUser === debtorId) return null;
 
-  async function handleSendReminder() {
+  async function handleSendReminder(e) {
+    e.stopPropagation();
+    if (sending) return;
+
     setSending(true);
     try {
       const res = await fetch('/api/notifications', {
@@ -25,8 +34,9 @@ export default function ReminderButton({ debtorId, debtorName, creditorName, amo
         body: JSON.stringify({
           recipientIds: [debtorId],
           heading: `💰 Payment Reminder from ${creditorName}`,
-          content: `Hey ${debtorName}! You owe ₹${amount.toFixed(2)} to ${creditorName}. Please settle up on MyWaySplit.`,
+          content: `Hey ${debtorName}! You owe ₹${Number(amount).toFixed(2)} to ${creditorName}. Please settle up on MyWaySplit.`,
           senderId: currentUser,
+          groupId: groupId || null,
           type: 'manual_reminder',
         }),
       });
@@ -34,11 +44,12 @@ export default function ReminderButton({ debtorId, debtorName, creditorName, amo
       const data = await res.json();
 
       if (res.ok) {
-        showToast(`Reminder sent to ${debtorName}!`, 'success');
+        showToast(`🔔 Push reminder sent to ${debtorName}'s device!`, 'success');
       } else {
         showToast(data.error || 'Failed to send reminder.', 'error');
       }
-    } catch {
+    } catch (err) {
+      console.error('Error sending reminder:', err);
       showToast('Network error sending reminder.', 'error');
     } finally {
       setSending(false);
@@ -47,10 +58,12 @@ export default function ReminderButton({ debtorId, debtorName, creditorName, amo
 
   return (
     <button
+      type="button"
       onClick={handleSendReminder}
       disabled={sending}
-      className="btn btn-ghost p-2 text-amber-600 hover:bg-amber-50 hover:text-amber-700 border-amber-200"
-      title={`Send push reminder to ${debtorName}`}
+      className="btn btn-ghost p-2 text-amber-600 hover:bg-amber-50 hover:text-amber-700 border border-amber-200/80 rounded-xl transition-all shadow-sm"
+      title={`Send instant push notification reminder to ${debtorName}`}
+      aria-label={`Send push reminder to ${debtorName}`}
     >
       {sending ? (
         <svg className="animate-spin h-4 w-4 border-t-2 border-b-2 border-amber-600 rounded-full" viewBox="0 0 24 24" />

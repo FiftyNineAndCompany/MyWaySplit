@@ -7,10 +7,12 @@ import { EXPENSE_CATEGORIES } from '@/lib/splitEngine';
 
 export default function ExpenseForm({
   participants,
+  activeGroup,
   activeGroupId,
   onDataChange,
 }) {
   const { showToast } = useToast();
+  const currentGroupId = activeGroup?.id || activeGroupId;
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [payerId, setPayerId] = useState('');
@@ -45,6 +47,17 @@ export default function ExpenseForm({
     setIncludedMemberIds(participants.map(p => p.id));
   }
 
+  function handleShareInvite() {
+    if (!activeGroup?.invite_code) {
+      showToast('No invite code found for this group.', 'error');
+      return;
+    }
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const inviteUrl = `${origin}/invite/${activeGroup.invite_code}`;
+    navigator.clipboard.writeText(inviteUrl);
+    showToast('🔗 Invite link copied to clipboard!', 'success');
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     const parsedAmount = parseFloat(amount);
@@ -65,7 +78,7 @@ export default function ExpenseForm({
         paid_by: payerId,
         category,
         split_among: includedMemberIds,
-        group_id: activeGroupId || null,
+        group_id: currentGroupId || null,
         is_archived: false,
       };
 
@@ -154,6 +167,26 @@ export default function ExpenseForm({
           <span className="badge badge-warning text-[10px]">Editing</span>
         )}
       </div>
+
+      {/* Viral Invite Banner: Allow generating and copying shareable link directly on Add Expenses */}
+      {activeGroup?.invite_code && (
+        <div className="mb-4 p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🔗</span>
+            <div>
+              <p className="text-xs font-bold text-indigo-900">Invite Friends to this Sheet</p>
+              <p className="text-[10px] text-indigo-600">They can join with 1 tap to split bills & settle</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleShareInvite}
+            className="btn btn-primary text-xs py-1.5 px-3 font-semibold shadow-sm shrink-0 whitespace-nowrap"
+          >
+            Copy Link
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Description */}

@@ -6,7 +6,8 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import { useToast } from '@/components/layout/Toast';
-import AuthModal from '@/components/auth/AuthModal';
+import { promptAndLockOneSignalDevice } from '@/lib/onesignal';
+import MandatoryLogin from '@/components/auth/MandatoryLogin';
 
 function InviteContent() {
   const router = useRouter();
@@ -17,11 +18,14 @@ function InviteContent() {
   const { showToast } = useToast();
 
   const [group, setGroup] = useState(null);
-  const [creatorName, setCreatorName] = useState('');
-  const [isAlreadyMember, setIsAlreadyMember] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isMember, setIsMember] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
+
+  // "Choose Name" step state
+  const [displayName, setDisplayName] = useState('');
+  const [upiId, setUpiId] = useState('');
+  const [phone, setPhone] = useState('');
 
   // 1. Fetch group details by invite code
   useEffect(() => {
@@ -35,7 +39,7 @@ function InviteContent() {
       try {
         let foundGroup = null;
 
-        // Strategy A: Secure Postgres RPC function (bypasses RLS with SECURITY DEFINER)
+        // Try RPC function first
         try {
           const { data: rpcData, error: rpcErr } = await supabase
             .rpc('get_group_by_invite', { invite_code_param: inviteCode });
@@ -45,54 +49,20 @@ function InviteContent() {
           }
         } catch (_) {}
 
-        // Strategy B: Next.js API route fallback
+        // Fallback to table query
         if (!foundGroup) {
-          try {
-            const apiRes = await fetch(`/api/invite/${inviteCode}`);
-            if (apiRes.ok) {
-              const json = await apiRes.json();
-              if (json?.success && json?.group) {
-                foundGroup = json.group;
-              }
-            }
-          } catch (_) {}
-        }
+          const { data: tableData } = await supabase
+            .from('groups')
+            .select('*')
+            .eq('invite_code', inviteCode)
+            .maybeSingle();
 
-        // Strategy C: Direct table select fallback
-        if (!foundGroup) {
-          try {
-            const { data: tableData } = await supabase
-              .from('groups')
-              .select('*')
-              .eq('invite_code', inviteCode)
-              .maybeSingle();
-
-            if (tableData) {
-              foundGroup = tableData;
-            }
-          } catch (_) {}
-        }
-
-        if (foundGroup) {
-          setGroup(foundGroup);
-
-          // Fetch group creator name if available
-          if (foundGroup.created_by) {
-            try {
-              const { data: creatorProfile } = await supabase
-                .from('profiles')
-                .select('full_name, email')
-                .eq('id', foundGroup.created_by)
-                .maybeSingle();
-
-              if (creatorProfile?.full_name) {
-                setCreatorName(creatorProfile.full_name);
-              }
-            } catch (_) {}
+          if (tableData) {
+            foundGroup = tableData;
           }
-        } else {
-          setGroup(null);
         }
+
+        setGroup(foundGroup);
       } catch (err) {
         console.warn('Error fetching invite:', err);
       } finally {
@@ -103,29 +73,41 @@ function InviteContent() {
     fetchGroup();
   }, [inviteCode]);
 
-  // 2. Check if the currently authenticated user is already a member
+  // 2. Pre-fill name and UPI when profile or user is available
   useEffect(() => {
-    async function checkMembership() {
-      if (!user?.id || !group?.id) {
-        setIsAlreadyMember(false);
-        return;
-      }
+    if (profile) {
+      if (!displayName && profile.full_name) setDisplayName(profile.full_name);
+      if (!upiId && profile.upi_id) setUpiId(profile.upi_id);
+      if (!phone && profile.phone) setPhone(profile.phone);
+    } else if (user && !displayName) {
+      const emailPrefix = user.email?.split('@')[0] || '';
+      setDisplayName(emailPrefix ? emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1) : '');
+    }
+  }, [user, profile, displayName, upiId, phone]);
 
+  // 3. Check membership & run OneSignal device locking when logged in
+  useEffect(() => {
+    if (!user?.id || !group?.id) return;
+
+    // Immediately trigger push permission & lock OneSignal device ID
+    promptAndLockOneSignalDevice(user.id);
+
+    async function checkMembership() {
       try {
         if (group.created_by === user.id) {
-          setIsAlreadyMember(true);
+          setIsMember(true);
           return;
         }
 
         const { data: memberRow } = await supabase
           .from('group_members')
-          .select('id, role')
+          .select('id')
           .eq('group_id', group.id)
           .eq('user_id', user.id)
           .maybeSingle();
 
         if (memberRow) {
-          setIsAlreadyMember(true);
+          setIsMember(true);
         }
       } catch (_) {}
     }
@@ -133,37 +115,34 @@ function InviteContent() {
     checkMembership();
   }, [user?.id, group?.id, group?.created_by]);
 
-  // 3. Handle Joining the Group
-  async function handleJoinGroup() {
-    if (!user) {
-      setAuthModalOpen(true);
-      return;
-    }
-
-    if (isAlreadyMember) {
-      localStorage.setItem('mywaysplit_active_group_id', group.id);
-      showToast(`Opening "${group.name}"...`, 'info');
-      router.push('/');
-      return;
+  // 4. Handle Joining Group ("Choose Name" Form Submission)
+  async function handleJoinSubmit(e) {
+    e.preventDefault();
+    if (!displayName.trim()) {
+      return showToast('Please enter your name.', 'error');
     }
 
     setJoining(true);
     try {
+      // Strategy A: Secure RPC function
       let joinSuccess = false;
-
-      // Strategy A: Secure Postgres RPC
       try {
         const { data: rpcRes, error: rpcErr } = await supabase
-          .rpc('join_group_by_invite', { invite_code_param: inviteCode });
+          .rpc('join_group_by_invite', {
+            invite_code_param: inviteCode,
+            display_name_param: displayName.trim(),
+            upi_id_param: upiId.trim() || null,
+            phone_param: phone.trim() || null,
+          });
 
         if (!rpcErr && rpcRes) {
           joinSuccess = true;
         }
       } catch (_) {}
 
-      // Strategy B: Direct upsert into group_members
+      // Strategy B: Fallback direct inserts
       if (!joinSuccess) {
-        const { error: memberError } = await supabase
+        await supabase
           .from('group_members')
           .upsert([{
             group_id: group.id,
@@ -172,41 +151,21 @@ function InviteContent() {
             status: 'active',
           }], { onConflict: 'group_id,user_id' });
 
-        if (memberError) {
-          console.warn('Direct upsert note:', memberError);
-        }
-      }
-
-      // Also ensure the user is registered in sheet participants table
-      try {
         await supabase
           .from('participants')
           .upsert([{
             id: user.id,
-            name: profile?.full_name || user.email?.split('@')[0] || 'Member',
-            upi_id: profile?.upi_id || null,
-            phone: profile?.phone || null,
+            user_id: user.id,
             group_id: group.id,
+            name: displayName.trim(),
+            upi_id: upiId.trim() || null,
+            phone: phone.trim() || null,
           }], { onConflict: 'id' });
-      } catch (_) {}
-
-      // Notify the group creator
-      if (group.created_by && group.created_by !== user.id) {
-        try {
-          await supabase
-            .from('notifications')
-            .insert([{
-              user_id: group.created_by,
-              group_id: group.id,
-              type: 'member_joined',
-              title: `New Member in ${group.name}`,
-              message: `${profile?.full_name || user.email?.split('@')[0] || 'A new member'} joined "${group.name}".`,
-            }]);
-        } catch (_) {}
       }
 
-      showToast(`Welcome! You joined "${group.name}" successfully!`, 'success');
+      // Save as active group in localStorage and redirect
       localStorage.setItem('mywaysplit_active_group_id', group.id);
+      showToast(`Welcome to "${group.name}"!`, 'success');
       router.push('/');
     } catch (err) {
       console.error('Error joining group:', err);
@@ -216,106 +175,164 @@ function InviteContent() {
     }
   }
 
+  // Handle already-a-member redirect
+  function handleGoToGroup() {
+    localStorage.setItem('mywaysplit_active_group_id', group.id);
+    showToast(`Opening "${group.name}"...`, 'info');
+    router.push('/');
+  }
+
   if (loading) {
     return (
-      <div className="max-w-md mx-auto py-24 px-4 text-center space-y-4 animate-in fade-in">
-        <div className="w-12 h-12 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-slate-500 font-medium text-sm">Verifying invite link...</p>
+      <div className="min-h-[60vh] flex flex-col items-center justify-center text-center p-6">
+        <svg className="animate-spin h-8 w-8 text-indigo-600 mb-4" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+        <p className="text-sm font-semibold text-slate-600">Loading invite details...</p>
       </div>
     );
   }
 
   if (!group) {
     return (
-      <div className="max-w-md mx-auto py-16 px-4 animate-in fade-in duration-300">
-        <div className="card p-8 sm:p-10 text-center space-y-5 shadow-xl border border-slate-200">
-          <div className="w-16 h-16 bg-rose-50 border border-rose-100 rounded-2xl flex items-center justify-center text-3xl mx-auto shadow-sm">
-            ⚠️
-          </div>
-          <div>
-            <h2 className="text-xl font-bold font-display text-slate-800">Invite Not Found</h2>
-            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-              This invite code (<code className="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-600 font-mono font-bold">{inviteCode}</code>) is invalid or expired.
-            </p>
-          </div>
-          <div className="pt-2 space-y-2">
-            <Link href="/" className="btn btn-primary w-full py-2.5 text-xs font-semibold">
-              Go to Dashboard
-            </Link>
-          </div>
+      <div className="max-w-md mx-auto my-12 p-8 bg-white rounded-3xl border border-slate-200 text-center shadow-lg space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-500 text-3xl flex items-center justify-center mx-auto">
+          ⚠️
         </div>
+        <h2 className="text-xl font-bold text-slate-800">Invite Not Found</h2>
+        <p className="text-xs text-slate-500">
+          This invite link does not exist or has expired. Please ask the group creator for a new link.
+        </p>
+        <Link href="/" className="btn btn-primary text-xs py-2 px-5 inline-block">
+          Go to Home
+        </Link>
       </div>
     );
   }
 
-  return (
-    <div className="max-w-md mx-auto py-12 px-4 animate-in fade-in duration-300">
-      <div className="card p-6 sm:p-8 text-center space-y-6 shadow-2xl border border-slate-100">
-        <div className="w-16 h-16 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-center text-3xl mx-auto shadow-sm">
-          👥
-        </div>
+  // STEP 1: Mandatory Login if user is not authenticated
+  if (!user) {
+    return (
+      <MandatoryLogin
+        inviteGroup={group}
+        redirectPath={`/invite/${inviteCode}`}
+      />
+    );
+  }
 
+  // STEP 2: Already a member
+  if (isMember) {
+    return (
+      <div className="max-w-md mx-auto my-12 p-8 bg-white rounded-3xl border border-slate-200 shadow-xl text-center space-y-5 animate-in fade-in">
+        <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 text-3xl flex items-center justify-center mx-auto">
+          ✅
+        </div>
         <div>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100/60">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+            Already a Member
+          </span>
+          <h2 className="text-2xl font-black font-display text-slate-900 mt-3">
+            {group.name}
+          </h2>
+          <p className="text-xs text-slate-500 mt-1">
+            You are already part of this expense sheet.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleGoToGroup}
+          className="btn btn-primary w-full py-3 text-sm font-semibold shadow-md shadow-indigo-100"
+        >
+          Open Expense Sheet →
+        </button>
+      </div>
+    );
+  }
+
+  // STEP 3: "Choose Name" Screen
+  return (
+    <div className="min-h-[75vh] flex items-center justify-center py-6 px-4">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200/80 p-6 sm:p-8 animate-in fade-in duration-300">
+        
+        {/* Group Banner */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-200 mb-3">
+            👥
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
             Group Invitation
           </span>
-          <h1 className="text-2xl font-black font-display text-slate-900 mt-3">
-            Join &quot;{group.name}&quot;
+          <h1 className="text-2xl font-extrabold font-display text-slate-900 mt-2">
+            Join {group.name}
           </h1>
-          {creatorName ? (
+          {group.creator_name && (
             <p className="text-xs text-slate-500 mt-1">
-              Invited by <span className="font-semibold text-slate-700">{creatorName}</span>
-            </p>
-          ) : null}
-          {group.description && (
-            <p className="text-xs text-slate-500 mt-2 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-              &quot;{group.description}&quot;
+              Invited by <span className="font-semibold text-slate-700">{group.creator_name}</span>
             </p>
           )}
         </div>
 
-        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 text-xs text-slate-600 space-y-2 text-left">
-          <p className="font-semibold text-slate-800">What you can do in this group:</p>
-          <ul className="space-y-1.5 list-disc list-inside text-slate-500 text-[11px] leading-relaxed">
-            <li>Split expenses with selective member inclusions</li>
-            <li>Settle balances with one tap via UPI QR & intent</li>
-            <li>Send and receive payment reminders</li>
-          </ul>
-        </div>
-
-        {isAlreadyMember && (
-          <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-medium flex items-center justify-center gap-2">
-            <span>✓</span> You are already a member of this expense sheet!
+        {/* Form: Choose Display Name & UPI */}
+        <form onSubmit={handleJoinSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Your Name in this Group *
+            </label>
+            <input
+              type="text"
+              required
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+              placeholder="e.g. Sairam"
+              className="input py-2.5 px-3 text-sm font-medium"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              This name will appear on expenses and settlements.
+            </p>
           </div>
-        )}
 
-        <div className="pt-2">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Your UPI ID (Optional — for receiving settlements)
+            </label>
+            <input
+              type="text"
+              value={upiId}
+              onChange={e => setUpiId(e.target.value)}
+              placeholder="name@okhdfcbank"
+              className="input py-2.5 px-3 text-sm"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              Enables 1-tap UPI payments directly to your bank account.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Phone Number (Optional)
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="9876543210"
+              className="input py-2.5 px-3 text-sm"
+            />
+          </div>
+
           <button
-            type="button"
+            type="submit"
             disabled={joining}
-            onClick={handleJoinGroup}
-            className="btn btn-primary w-full py-3 text-sm font-semibold shadow-lg shadow-indigo-100"
+            className="btn btn-primary w-full py-3 text-sm font-semibold shadow-md shadow-indigo-100 mt-3"
           >
-            {joining ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Joining Sheet...
-              </span>
-            ) : isAlreadyMember ? (
-              'Open Expense Sheet →'
-            ) : user ? (
-              'Accept Invite & Open Sheet →'
-            ) : (
-              'Sign In to Accept Invite →'
-            )}
+            {joining ? 'Joining Group...' : `Join ${group.name} →`}
           </button>
-        </div>
+        </form>
 
-        <AuthModal
-          isOpen={authModalOpen}
-          onClose={() => setAuthModalOpen(false)}
-          defaultMode="signin"
-        />
+        <p className="text-center text-[11px] text-slate-400 mt-4">
+          Push notifications enabled for instant payment reminders and debt updates.
+        </p>
       </div>
     </div>
   );
@@ -324,9 +341,8 @@ function InviteContent() {
 export default function InvitePage() {
   return (
     <Suspense fallback={
-      <div className="max-w-md mx-auto py-24 px-4 text-center space-y-4">
-        <div className="w-12 h-12 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-slate-500 font-medium text-sm">Loading invitation...</p>
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <p className="text-sm text-slate-500">Loading invite...</p>
       </div>
     }>
       <InviteContent />

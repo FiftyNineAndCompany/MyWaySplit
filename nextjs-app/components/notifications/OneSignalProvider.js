@@ -1,29 +1,23 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { initOneSignal, loginOneSignal, logoutOneSignal } from '@/lib/onesignal';
+import { useEffect } from 'react';
+import { initOneSignal, promptAndLockOneSignalDevice, logoutOneSignal } from '@/lib/onesignal';
 
 /**
- * OneSignal Provider — initializes the SDK and handles user login/logout safely.
- * This is a headless component (renders nothing).
+ * OneSignal Provider — Initializes the SDK and runs mandatory push permission + Device ID locking.
  */
 export default function OneSignalProvider({ currentUser }) {
-  const previousUserRef = useRef(null);
-
   useEffect(() => {
+    // 1. Initialize client-side SDK
     initOneSignal();
-  }, []);
 
-  useEffect(() => {
+    // 2. If authenticated user is present, lock device and prompt permission
     if (currentUser) {
-      previousUserRef.current = currentUser;
-      loginOneSignal(currentUser);
-    } else if (previousUserRef.current) {
-      // Only logout if a user had actively logged in prior
-      previousUserRef.current = null;
+      promptAndLockOneSignalDevice(currentUser);
+    } else {
       logoutOneSignal();
     }
   }, [currentUser]);
 
-  return null; // Headless
+  return null;
 }

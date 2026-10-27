@@ -89,6 +89,18 @@ export function AuthProvider({ children }) {
     };
   }, [fetchProfile]);
 
+  const signInWithGoogle = async (redirectPath = '/') => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${origin}${redirectPath}`,
+      },
+    });
+    if (error) throw error;
+    return data;
+  };
+
   const signIn = async (email, password) => {
     const res = await supabase.auth.signInWithPassword({ email, password });
     if (res.error) throw res.error;
@@ -152,6 +164,7 @@ export function AuthProvider({ children }) {
         profile,
         loading,
         signIn,
+        signInWithGoogle,
         signUp,
         signOut,
         refreshProfile: () => fetchProfile(user?.id, user?.email),

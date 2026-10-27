@@ -3,232 +3,245 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
-import LoanOfferCard from '@/components/loans/LoanOfferCard';
-import LoanApplicationForm from '@/components/loans/LoanApplicationForm';
+import { useAuth } from '@/lib/authContext';
+import { useToast } from '@/components/layout/Toast';
 
-// Fallback seed products for demonstration
-const FALLBACK_PRODUCTS = [
-  {
-    id: 'prod-1',
-    product_name: 'Instant Personal Micro-Loan',
-    min_amount: 10000,
-    max_amount: 200000,
-    interest_rate_annual: 11.5,
-    tenure_months_min: 3,
-    tenure_months_max: 24,
-    processing_fee_percent: 1.5,
-    description: 'Instant approval within 10 minutes. Minimal KYC, funds sent directly to your bank/UPI.',
-    eligibility_criteria: 'Indian resident, age 21+, active bank account',
-    lenders: {
-      id: 'lend-1',
-      company_name: 'QuickFin Capital',
-      is_verified: true,
-      description: 'RBI-regulated NBFC digital lending partner',
-      contact_email: 'support@quickfincapital.com'
-    }
-  },
-  {
-    id: 'prod-2',
-    product_name: 'Flexi Trip & Rent Credit Line',
-    min_amount: 15000,
-    max_amount: 500000,
-    interest_rate_annual: 13.0,
-    tenure_months_min: 6,
-    tenure_months_max: 36,
-    processing_fee_percent: 2.0,
-    description: 'Revolving line of credit. Draw only what you need to settle group balances, pay interest only on what you withdraw.',
-    eligibility_criteria: 'Salaried or self-employed individuals with ₹15,000+ monthly inflow',
-    lenders: {
-      id: 'lend-2',
-      company_name: 'EasyLend Finance',
-      is_verified: true,
-      description: 'Peer-to-peer peer lender network',
-      contact_email: 'apply@easylend.in'
-    }
-  },
-  {
-    id: 'prod-3',
-    product_name: 'Emergency Group Debt Buster',
-    min_amount: 10000,
-    max_amount: 150000,
-    interest_rate_annual: 9.9,
-    tenure_months_min: 3,
-    tenure_months_max: 12,
-    processing_fee_percent: 0.99,
-    description: 'Special low-interest promotional loan tailored specifically for settling MyWaySplit balances with zero foreclosure charges.',
-    eligibility_criteria: 'Active MyWaySplit participant with verified phone number',
-    lenders: {
-      id: 'lend-3',
-      company_name: 'Saitechverse Credit Line',
-      is_verified: true,
-      description: 'Official MyWaySplit financing partner',
-      contact_email: 'credit@saitechverse.com'
-    }
-  }
-];
-
-function BorrowContent() {
+function BorrowFormContent() {
   const searchParams = useSearchParams();
-  const prefilledAmount = searchParams?.get('amount') || '25000';
+  const prefilledAmount = searchParams?.get('amount') || '';
 
-  const [products, setProducts] = useState(FALLBACK_PRODUCTS);
-  const [loading, setLoading] = useState(true);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [applyAmount, setApplyAmount] = useState(Number(prefilledAmount) || 25000);
-  const [filterRate, setFilterRate] = useState('all');
-  const [participants, setParticipants] = useState([]);
+  const { user, profile } = useAuth();
+  const { showToast } = useToast();
+
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [amount, setAmount] = useState(prefilledAmount ? String(Math.max(10000, Number(prefilledAmount))) : '15000');
+  const [reason, setReason] = useState('Group Settlement Balance');
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
-    async function fetchOffers() {
-      try {
-        const [prodRes, partRes] = await Promise.all([
-          supabase
-            .from('loan_products')
-            .select(`
-              *,
-              lenders (
-                id,
-                company_name,
-                is_verified,
-                logo_url,
-                description,
-                contact_email
-              )
-            `)
-            .eq('is_active', true),
-          supabase.from('participants').select('*')
-        ]);
-
-        if (prodRes.data && prodRes.data.length > 0) {
-          setProducts(prodRes.data);
-        }
-
-        if (partRes.data && partRes.data.length > 0) {
-          setParticipants(partRes.data);
-        } else {
-          const localParts = localStorage.getItem('mywaysplit_participants');
-          if (localParts) setParticipants(JSON.parse(localParts));
-        }
-      } catch (err) {
-        console.warn('Error fetching loan offers, using fallback:', err);
-      } finally {
-        setLoading(false);
+    if (profile) {
+      if (!fullName && profile.full_name) setFullName(profile.full_name);
+      if (!phone && profile.phone) setPhone(profile.phone);
+      if (!email && profile.email) setEmail(profile.email);
+    } else if (user) {
+      if (!email && user.email) setEmail(user.email);
+      if (!fullName) {
+        const prefix = user.email?.split('@')[0] || '';
+        setFullName(prefix ? prefix.charAt(0).toUpperCase() + prefix.slice(1) : '');
       }
     }
+  }, [user, profile, fullName, phone, email]);
 
-    fetchOffers();
-  }, []);
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const numAmount = Number(amount);
 
-  function handleSelectForApply(prod, amount) {
-    setSelectedProduct(prod);
-    setApplyAmount(amount);
+    if (numAmount < 10000) {
+      return showToast('Loans are exclusively available for settlements exceeding ₹10,000.', 'error');
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/loan-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName,
+          phone,
+          email,
+          amount: numAmount,
+          reason,
+          userId: user?.id || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit request.');
+
+      setSubmitted(true);
+      showToast('Loan request submitted successfully!', 'success');
+    } catch (err) {
+      console.error('Error submitting loan request:', err);
+      showToast(err.message || 'Error submitting loan request.', 'error');
+    } finally {
+      setLoading(false);
+    }
   }
 
-  const filteredProducts = products.filter(p => {
-    if (filterRate === 'low') return (p.interest_rate_annual || 14) <= 12;
-    if (filterRate === 'mid') return (p.interest_rate_annual || 14) > 12 && (p.interest_rate_annual || 14) <= 15;
-    return true;
-  });
+  if (submitted) {
+    return (
+      <div className="max-w-lg mx-auto my-10 p-8 bg-white rounded-3xl border border-slate-200/80 shadow-xl text-center space-y-6 animate-in fade-in">
+        <div className="w-20 h-20 rounded-3xl bg-emerald-50 text-emerald-600 text-4xl flex items-center justify-center mx-auto shadow-inner">
+          🤝
+        </div>
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-300">
-      {/* Hero Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-8 sm:p-12 text-white shadow-xl relative overflow-hidden">
-        <div className="max-w-3xl relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold mb-4 border border-emerald-500/30">
-            <span>🤝 Micro-Financing & P2P Lending Marketplace</span>
-          </div>
-          <h1 className="text-3xl sm:text-5xl font-black font-display tracking-tight leading-tight">
-            Need Cash to Settle Group Debts?
+        <div>
+          <span className="text-[10px] font-black uppercase tracking-wider px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full">
+            Application Received
+          </span>
+          <h1 className="text-2xl font-black font-display text-slate-900 mt-3">
+            Loan Request Submitted
           </h1>
-          <p className="mt-4 text-slate-300 text-sm sm:text-base leading-relaxed">
-            Borrow ₹10,000 to ₹5,00,000 instantly from verified NBFCs and peer lenders. Clear your MyWaySplit balances today, pay back in comfortable monthly EMIs.
+          <p className="text-sm font-semibold text-indigo-600 mt-1">
+            Amount Requested: ₹{Number(amount).toLocaleString('en-IN')}
           </p>
-
-          <div className="mt-6 flex flex-wrap gap-4 text-xs font-semibold text-slate-300">
-            <span className="flex items-center gap-1.5">✓ 100% Digital Application</span>
-            <span className="flex items-center gap-1.5">✓ 24hr Disbursal to Bank/UPI</span>
-            <span className="flex items-center gap-1.5">✓ Zero Hidden Charges</span>
-          </div>
         </div>
 
-        <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-      </div>
-
-      {/* Filter Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-700">Filter By Rate:</span>
-          <button
-            onClick={() => setFilterRate('all')}
-            className={`btn text-xs py-1.5 px-3 ${filterRate === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-          >
-            All Rates
-          </button>
-          <button
-            onClick={() => setFilterRate('low')}
-            className={`btn text-xs py-1.5 px-3 ${filterRate === 'low' ? 'btn-primary' : 'btn-ghost'}`}
-          >
-            Under 12% p.a.
-          </button>
-          <button
-            onClick={() => setFilterRate('mid')}
-            className={`btn text-xs py-1.5 px-3 ${filterRate === 'mid' ? 'btn-primary' : 'btn-ghost'}`}
-          >
-            12% - 15% p.a.
-          </button>
+        {/* Mandatory Confirmation Notice */}
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-sm font-medium leading-relaxed">
+          ⏱️ <span className="font-bold">Admin will take 72 hours to respond.</span>
+          <p className="text-xs text-amber-800/80 mt-1">
+            We will contact you via email at <strong>{email}</strong> or phone at <strong>{phone}</strong> to review settlement verification.
+          </p>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <span>Are you a financial institution?</span>
-          <Link href="/lender/register" className="font-bold text-indigo-600 hover:underline">
-            Register as Lender →
+        <div className="pt-2">
+          <Link
+            href="/"
+            className="btn btn-primary w-full py-3 text-sm font-semibold shadow-md shadow-indigo-100"
+          >
+            Return to Expense Dashboard →
           </Link>
         </div>
       </div>
+    );
+  }
 
-      {/* Product Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProducts.map((product) => (
-          <LoanOfferCard
-            key={product.id}
-            product={product}
-            prefilledAmount={prefilledAmount}
-            onSelectForApply={handleSelectForApply}
-          />
-        ))}
-      </div>
-
-      {/* Trust & RBI Compliance Notice */}
-      <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200/80 text-center max-w-3xl mx-auto">
-        <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 mx-auto flex items-center justify-center font-bold mb-2">
-          🛡️
+  return (
+    <div className="max-w-xl mx-auto my-6 sm:my-10 px-4">
+      {/* Header Banner */}
+      <div className="text-center mb-8">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold mb-3">
+          <span>⚡ High-Balance Financing</span>
         </div>
-        <h4 className="font-bold text-slate-800 text-sm">Safe, Transparent & Regulated</h4>
-        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-          MyWaySplit operates purely as a technology facilitator and financial marketplace. All credit underwriting, verification, and disbursals are performed directly by RBI-registered Non-Banking Financial Companies (NBFCs) and registered Peer-to-Peer (P2P) lending platforms.
+        <h1 className="text-3xl sm:text-4xl font-extrabold font-display text-slate-900 tracking-tight">
+          Request Loan
+        </h1>
+        <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto">
+          Need help clearing large trip balances or shared flat security deposits? Request flexible financing for settlements of ₹10,000 and above.
         </p>
       </div>
 
-      {/* Loan Application Modal */}
-      {selectedProduct && (
-        <LoanApplicationForm
-          product={selectedProduct}
-          initialAmount={applyAmount}
-          participants={participants}
-          onClose={() => setSelectedProduct(null)}
-          onSuccess={() => setSelectedProduct(null)}
-        />
-      )}
+      {/* Form Card */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xl">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Requested Amount */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Settlement Amount (₹) * (Min ₹10,000)
+            </label>
+            <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-base">
+                ₹
+              </span>
+              <input
+                type="number"
+                min={10000}
+                step={500}
+                required
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="25000"
+                className="input pl-8 text-base font-bold text-indigo-600"
+              />
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Settlements below ₹10,000 are not eligible for loan assistance.
+            </p>
+          </div>
+
+          {/* Full Name */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Applicant Full Name *
+            </label>
+            <input
+              type="text"
+              required
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+              placeholder="e.g. Sairam Lodhi"
+              className="input text-sm"
+            />
+          </div>
+
+          {/* Contact Fields */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Mobile Number *
+              </label>
+              <input
+                type="tel"
+                required
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="9876543210"
+                className="input text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Email Address *
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="input text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Reason / Purpose */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Settlement Purpose / Group Details
+            </label>
+            <input
+              type="text"
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              placeholder="e.g. Goa Trip Settlement with 5 members"
+              className="input text-sm"
+            />
+          </div>
+
+          {/* Notice Banner */}
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-600 space-y-1">
+            <p className="font-semibold text-slate-800">📌 Important Timeline Note:</p>
+            <p>Admin will review the request and respond within <strong>72 hours</strong> with terms.</p>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn btn-primary w-full py-3 text-sm font-semibold shadow-md shadow-indigo-100 mt-2"
+          >
+            {loading ? 'Submitting Application...' : 'Submit Loan Request →'}
+          </button>
+        </form>
+      </div>
+
+      <div className="text-center mt-6">
+        <Link href="/" className="text-xs text-slate-500 hover:text-indigo-600 transition">
+          ← Back to Expense Dashboard
+        </Link>
+      </div>
     </div>
   );
 }
 
 export default function BorrowPage() {
   return (
-    <Suspense fallback={<div className="p-12 text-center text-slate-400">Loading marketplace offers...</div>}>
-      <BorrowContent />
+    <Suspense fallback={<div className="p-8 text-center text-sm text-slate-400">Loading form...</div>}>
+      <BorrowFormContent />
     </Suspense>
   );
 }

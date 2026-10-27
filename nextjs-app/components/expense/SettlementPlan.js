@@ -5,7 +5,7 @@ import UpiPayButton from '@/components/payment/UpiPayButton';
 import WhatsAppReminder from '@/components/payment/WhatsAppReminder';
 import ReminderButton from '@/components/notifications/ReminderButton';
 
-export default function SettlementPlan({ participants, expenses, currentUser }) {
+export default function SettlementPlan({ participants, expenses, currentUser, activeGroupId }) {
   const settlements = calculateSettlements(participants, expenses);
 
   if (participants.length === 0 || expenses.length === 0) {
@@ -87,13 +87,14 @@ export default function SettlementPlan({ participants, expenses, currentUser }) 
                     amount={s.amount}
                   />
 
-                  {/* Push Notification Reminder */}
+                  {/* Targeted Push Notification Reminder */}
                   <ReminderButton
-                    debtorId={s.from.id}
+                    debtorId={s.from.user_id || s.from.id}
                     debtorName={s.from.name}
                     creditorName={s.to.name}
                     amount={s.amount}
                     currentUser={currentUser}
+                    groupId={activeGroupId}
                   />
                 </div>
               </div>
