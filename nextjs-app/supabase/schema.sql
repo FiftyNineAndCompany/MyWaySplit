@@ -92,7 +92,7 @@ CREATE OR REPLACE FUNCTION is_group_member(check_group_id UUID, check_user_id UU
 RETURNS BOOLEAN AS $$
   SELECT EXISTS (
     SELECT 1 FROM groups
-    WHERE id = check_group_id AND (created_by = check_user_id OR created_by IS NULL)
+    WHERE id = check_group_id AND created_by = check_user_id
   ) OR EXISTS (
     SELECT 1 FROM group_members
     WHERE group_id = check_group_id
@@ -105,7 +105,7 @@ CREATE OR REPLACE FUNCTION is_group_admin(check_group_id UUID, check_user_id UUI
 RETURNS BOOLEAN AS $$
   SELECT EXISTS (
     SELECT 1 FROM groups
-    WHERE id = check_group_id AND (created_by = check_user_id OR created_by IS NULL)
+    WHERE id = check_group_id AND created_by = check_user_id
   ) OR EXISTS (
     SELECT 1 FROM group_members
     WHERE group_id = check_group_id
@@ -407,36 +407,32 @@ ALTER TABLE participants ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "participants_select" ON participants;
 CREATE POLICY "participants_select" ON participants FOR SELECT USING (
   auth.uid() IS NOT NULL AND (
-    group_id IS NULL OR
     is_group_member(group_id, auth.uid()) OR
-    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND (created_by = auth.uid() OR created_by IS NULL))
+    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND created_by = auth.uid())
   )
 );
 
 DROP POLICY IF EXISTS "participants_insert" ON participants;
 CREATE POLICY "participants_insert" ON participants FOR INSERT WITH CHECK (
   auth.uid() IS NOT NULL AND (
-    group_id IS NULL OR
     is_group_member(group_id, auth.uid()) OR
-    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND (created_by = auth.uid() OR created_by IS NULL))
+    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND created_by = auth.uid())
   )
 );
 
 DROP POLICY IF EXISTS "participants_update" ON participants;
 CREATE POLICY "participants_update" ON participants FOR UPDATE USING (
   auth.uid() IS NOT NULL AND (
-    group_id IS NULL OR
     is_group_member(group_id, auth.uid()) OR
-    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND (created_by = auth.uid() OR created_by IS NULL))
+    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND created_by = auth.uid())
   )
 );
 
 DROP POLICY IF EXISTS "participants_delete" ON participants;
 CREATE POLICY "participants_delete" ON participants FOR DELETE USING (
   auth.uid() IS NOT NULL AND (
-    group_id IS NULL OR
     is_group_member(group_id, auth.uid()) OR
-    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND (created_by = auth.uid() OR created_by IS NULL))
+    EXISTS (SELECT 1 FROM groups WHERE id = participants.group_id AND created_by = auth.uid())
   )
 );
 
@@ -445,36 +441,32 @@ ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "expenses_select_group_members" ON expenses;
 CREATE POLICY "expenses_select_group_members" ON expenses FOR SELECT USING (
   auth.uid() IS NOT NULL AND (
-    group_id IS NULL OR
     is_group_member(group_id, auth.uid()) OR
-    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND (created_by = auth.uid() OR created_by IS NULL))
+    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND created_by = auth.uid())
   )
 );
 
 DROP POLICY IF EXISTS "expenses_insert_group_members" ON expenses;
 CREATE POLICY "expenses_insert_group_members" ON expenses FOR INSERT WITH CHECK (
   auth.uid() IS NOT NULL AND (
-    group_id IS NULL OR
     is_group_member(group_id, auth.uid()) OR
-    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND (created_by = auth.uid() OR created_by IS NULL))
+    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND created_by = auth.uid())
   )
 );
 
 DROP POLICY IF EXISTS "expenses_update_creator_or_admin" ON expenses;
 CREATE POLICY "expenses_update_creator_or_admin" ON expenses FOR UPDATE USING (
   auth.uid() IS NOT NULL AND (
-    group_id IS NULL OR
     is_group_member(group_id, auth.uid()) OR
-    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND (created_by = auth.uid() OR created_by IS NULL))
+    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND created_by = auth.uid())
   )
 );
 
 DROP POLICY IF EXISTS "expenses_delete_creator_or_admin" ON expenses;
 CREATE POLICY "expenses_delete_creator_or_admin" ON expenses FOR DELETE USING (
   auth.uid() IS NOT NULL AND (
-    group_id IS NULL OR
     is_group_member(group_id, auth.uid()) OR
-    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND (created_by = auth.uid() OR created_by IS NULL))
+    EXISTS (SELECT 1 FROM groups WHERE id = expenses.group_id AND created_by = auth.uid())
   )
 );
 

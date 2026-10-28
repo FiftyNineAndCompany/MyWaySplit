@@ -101,6 +101,32 @@ export default function GroupManager({
     window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
   }
 
+  // 4. Share via Others (Native mobile share sheet: Telegram, Instagram, SMS, Email, Twitter/X)
+  async function shareViaOthers() {
+    if (!activeGroup?.invite_code) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const inviteUrl = `${origin}/invite/${activeGroup.invite_code}`;
+    const shareData = {
+      title: `Join "${activeGroup.name}" on MyWaySplit`,
+      text: `Hey! Join our expense sheet "${activeGroup.name}" on MyWaySplit to track shared expenses and settle balances via UPI:\n${inviteUrl}`,
+      url: inviteUrl,
+    };
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share(shareData);
+        showToast('Shared successfully!', 'success');
+        return;
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          copyInviteLink();
+        }
+        return;
+      }
+    }
+    copyInviteLink();
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-4">
       {/* Top Header & Group Selector */}
@@ -142,18 +168,26 @@ export default function GroupManager({
               <button
                 type="button"
                 onClick={shareViaWhatsApp}
-                className="btn text-xs py-1.5 px-3 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
-                title="Share invite on WhatsApp"
+                className="btn text-xs py-1.5 px-3 bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm font-semibold flex items-center gap-1.5"
+                title="Share invite directly to WhatsApp"
               >
-                💬 WhatsApp
+                <span>💬 WhatsApp</span>
+              </button>
+              <button
+                type="button"
+                onClick={shareViaOthers}
+                className="btn text-xs py-1.5 px-3 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 font-semibold flex items-center gap-1.5"
+                title="Share invite via SMS, Telegram, Instagram, or other apps"
+              >
+                <span>📤 Share (Others)</span>
               </button>
               <button
                 type="button"
                 onClick={copyInviteLink}
-                className="btn btn-ghost text-xs py-1.5 px-3 border border-slate-200 text-slate-700 hover:bg-slate-50"
+                className="btn btn-ghost text-xs py-1.5 px-2.5 border border-slate-200 text-slate-700 hover:bg-slate-50"
                 title="Copy public invite link"
               >
-                🔗 Share Link
+                🔗 Copy
               </button>
             </>
           )}

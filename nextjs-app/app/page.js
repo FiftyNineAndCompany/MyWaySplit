@@ -22,7 +22,7 @@ export default function Home() {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Load Groups for Authenticated User (Strictly isolated by RLS)
+  // 1. Load Groups for Authenticated User (Strictly isolated by user ownership & active membership)
   const loadGroups = useCallback(async () => {
     if (!user) {
       setGroups([]);
@@ -34,36 +34,91 @@ export default function Home() {
     }
 
     try {
-      // Query groups where user is creator or member (enforced by RLS)
-      const { data, error } = await supabase
-        .from('groups')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // 1. Fetch group IDs where user is explicitly an active member
+      const { data: gmRows } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active');
+
+      const memberGroupIds = (gmRows || []).map(r => r.group_id).filter(Boolean);
+
+      // 2. Fetch groups strictly created by this user OR where user is an active member
+      let query = supabase.from('groups').select('*');
+      if (memberGroupIds.length > 0) {
+        query = query.or(`created_by.eq.${user.id},id.in.(${memberGroupIds.join(',')})`);
+      } else {
+        query = query.eq('created_by', user.id);
+      }
+
+      const { data: userGroups, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         console.warn('Groups fetch note:', error);
       }
 
-      if (data && data.length > 0) {
-        setGroups(data);
+      if (userGroups && userGroups.length > 0) {
+        setGroups(userGroups);
         const storedActiveId = typeof window !== 'undefined'
           ? localStorage.getItem('mywaysplit_active_group_id')
           : null;
-        const found = data.find(g => g.id === storedActiveId) || data[0];
+        // Ensure stored active ID actually belongs to this user's authorized groups
+        const found = userGroups.find(g => g.id === storedActiveId) || userGroups[0];
         setActiveGroup(found);
         if (typeof window !== 'undefined') {
           localStorage.setItem('mywaysplit_active_group_id', found.id);
         }
       } else {
-        setGroups([]);
-        setActiveGroup(null);
+        // FRESH LOGIN: User has no groups yet!
+        // Automatically create a fresh, empty expense sheet for this user (Zero older expenses of others!)
+        const currentUserName = profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'My';
+        const defaultName = `${currentUserName}'s Expenses`;
+        const inviteCode = Math.random().toString(36).substring(2, 10);
+
+        const { data: newGroup, error: createErr } = await supabase
+          .from('groups')
+          .insert([{
+            name: defaultName,
+            invite_code: inviteCode,
+            created_by: user.id,
+          }])
+          .select()
+          .single();
+
+        if (newGroup && !createErr) {
+          // Record creator in group_members as admin
+          await supabase.from('group_members').insert([{
+            group_id: newGroup.id,
+            user_id: user.id,
+            role: 'admin',
+            status: 'active',
+          }]);
+
+          // Add creator as first participant in their fresh sheet
+          await supabase.from('participants').insert([{
+            user_id: user.id,
+            group_id: newGroup.id,
+            name: currentUserName === 'My' ? 'You' : currentUserName,
+            upi_id: profile?.upi_id || null,
+            phone: profile?.phone || null,
+          }]);
+
+          setGroups([newGroup]);
+          setActiveGroup(newGroup);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('mywaysplit_active_group_id', newGroup.id);
+          }
+        } else {
+          setGroups([]);
+          setActiveGroup(null);
+        }
       }
     } catch (err) {
       console.warn('Groups fetch error:', err);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, profile]);
 
   // 2. Load Group Data (Members & Expenses strictly scoped to active group)
   const loadGroupData = useCallback(async () => {
@@ -74,28 +129,7 @@ export default function Home() {
     }
 
     try {
-      // 1. Ensure user is recorded in group_members for active group
-      if (user?.id && activeGroup?.id) {
-        const { data: gmData } = await supabase
-          .from('group_members')
-          .select('id')
-          .eq('group_id', activeGroup.id)
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (!gmData) {
-          await supabase.from('group_members').upsert([
-            {
-              group_id: activeGroup.id,
-              user_id: user.id,
-              role: activeGroup.created_by === user.id || !activeGroup.created_by ? 'admin' : 'member',
-              status: 'active',
-            }
-          ], { onConflict: 'group_id,user_id' });
-        }
-      }
-
-      // 2. Fetch participants strictly for this active group from Supabase
+      // 1. Fetch participants strictly for this active group
       const { data: partRows, error: pErr } = await supabase
         .from('participants')
         .select('*')
@@ -112,11 +146,11 @@ export default function Home() {
         }));
       }
 
-      // 3. Ensure current user has a real participant record in the database
+      // 2. Ensure current user is in participants list for the sheet
       const currentUserName = profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'You';
       const existingUserPart = list.find(p => p.user_id === user.id || p.id === user.id);
 
-      if (!existingUserPart) {
+      if (!existingUserPart && activeGroup.created_by === user.id) {
         const { data: newPartRow, error: npErr } = await supabase
           .from('participants')
           .insert([{
@@ -137,20 +171,12 @@ export default function Home() {
             upi_id: newPartRow.upi_id || '',
             phone: newPartRow.phone || '',
           });
-        } else {
-          list.unshift({
-            id: user.id,
-            user_id: user.id,
-            name: currentUserName,
-            upi_id: profile?.upi_id || '',
-            phone: profile?.phone || '',
-          });
         }
       }
 
       setParticipants(list);
 
-      // 4. Fetch expenses strictly for active group
+      // 3. Fetch expenses strictly for active group (Zero older expenses for fresh sheet!)
       const { data: expenseRows, error: expErr } = await supabase
         .from('expenses')
         .select('*')
@@ -235,11 +261,56 @@ export default function Home() {
               href="#split-section"
               className="btn bg-white text-indigo-900 hover:bg-indigo-50 font-bold text-xs py-2 px-4 shadow-md"
             >
-              Log Expense ↓
+              + Log Expense ↓
             </a>
+            {activeGroup?.invite_code && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                    const inviteUrl = `${origin}/invite/${activeGroup.invite_code}`;
+                    const text = encodeURIComponent(`Hey! Join our expense sheet "${activeGroup.name}" on MyWaySplit to track shared expenses and settle balances via UPI:\n${inviteUrl}`);
+                    window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+                  }}
+                  className="btn bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 px-3.5 shadow-md flex items-center gap-1.5"
+                  title="Share invite link on WhatsApp"
+                >
+                  💬 Share WhatsApp
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                    const inviteUrl = `${origin}/invite/${activeGroup.invite_code}`;
+                    const shareData = {
+                      title: `Join "${activeGroup.name}" on MyWaySplit`,
+                      text: `Hey! Join our expense sheet "${activeGroup.name}" on MyWaySplit to track shared expenses and settle balances via UPI:\n${inviteUrl}`,
+                      url: inviteUrl,
+                    };
+                    if (typeof navigator !== 'undefined' && navigator.share) {
+                      try {
+                        await navigator.share(shareData);
+                        return;
+                      } catch (err) {
+                        if (err.name === 'AbortError') return;
+                      }
+                    }
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      navigator.clipboard.writeText(inviteUrl);
+                      alert('🔗 Invite link copied to clipboard!');
+                    }
+                  }}
+                  className="btn bg-indigo-700/90 hover:bg-indigo-700 text-white border border-indigo-400/40 font-bold text-xs py-2 px-3.5 flex items-center gap-1.5 shadow-md"
+                  title="Share via Telegram, Instagram, SMS, Email, etc."
+                >
+                  📤 Share (Others)
+                </button>
+              </>
+            )}
             <Link
               href="/borrow"
-              className="btn bg-indigo-600/80 text-white hover:bg-indigo-600 border border-indigo-400/40 text-xs py-2 px-4"
+              className="btn bg-indigo-900/60 text-indigo-200 hover:text-white hover:bg-indigo-900/80 border border-indigo-400/30 text-xs py-2 px-3"
             >
               Request Loan (&gt; ₹10k) →
             </Link>

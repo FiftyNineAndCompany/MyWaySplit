@@ -22,13 +22,29 @@ export async function POST(request) {
     let onesignalNotificationId = null;
     let pushDelivered = false;
 
-    // 1. Fetch debtor profile(s) from Supabase to retrieve their locked OneSignal Subscription/Device ID
+    // 1. Resolve recipient IDs (if a participant ID was passed, find their actual Supabase Auth user_id)
+    let targetUserIds = [...recipientIds];
+    try {
+      const { data: partRows } = await supabase
+        .from('participants')
+        .select('id, user_id')
+        .in('id', recipientIds);
+
+      if (partRows && partRows.length > 0) {
+        targetUserIds = recipientIds.map(recId => {
+          const match = partRows.find(p => p.id === recId);
+          return match?.user_id || recId;
+        });
+      }
+    } catch (_) {}
+
+    // 2. Fetch debtor profile(s) to retrieve their OneSignal Subscription / Device ID
     let subscriptionIds = [];
     try {
       const { data: debtorProfiles } = await supabase
         .from('profiles')
         .select('id, full_name, onesignal_player_id')
-        .in('id', recipientIds);
+        .in('id', targetUserIds);
 
       if (debtorProfiles && debtorProfiles.length > 0) {
         subscriptionIds = debtorProfiles
@@ -39,7 +55,7 @@ export async function POST(request) {
       console.warn('[Profile Lookup Note]:', lookupErr);
     }
 
-    // 2. Dispatch targeted push via OneSignal REST API v2
+    // 3. Dispatch targeted push via OneSignal REST API v2
     if (ONESIGNAL_REST_API_KEY) {
       try {
         const payload = {
@@ -49,8 +65,7 @@ export async function POST(request) {
           priority: 10,
           ios_sound: 'default',
           android_sound: 'default',
-          android_channel_id: 'reminders',
-          web_sound: 'default',
+          sound: 'default',
           url: process.env.NEXT_PUBLIC_SITE_URL || 'https://fairshare.saitechverse.com',
         };
 
@@ -60,7 +75,7 @@ export async function POST(request) {
         } else {
           // Fall back to external_id aliasing
           payload.include_aliases = {
-            external_id: recipientIds,
+            external_id: targetUserIds,
           };
           payload.target_channel = 'push';
         }
@@ -85,14 +100,14 @@ export async function POST(request) {
         console.error('[OneSignal Push Error]:', err);
       }
     } else {
-      console.log('[OneSignal] Simulated targeted push to external_id:', recipientIds, 'subscription_ids:', subscriptionIds);
+      console.log('[OneSignal] Simulated targeted push to user:', targetUserIds, 'subscription_ids:', subscriptionIds);
       onesignalNotificationId = `mock-${Date.now()}`;
       pushDelivered = true;
     }
 
-    // 3. Log in Supabase notifications table (targeted in-app notification for the debtor)
+    // 4. Log in Supabase notifications table (triggers Supabase Realtime in-app alert + phone sound on debtor device)
     try {
-      const inAppLogs = recipientIds.map(recId => ({
+      const inAppLogs = targetUserIds.map(recId => ({
         user_id: recId,
         group_id: groupId || null,
         type: type === 'manual_reminder' ? 'debt_reminder' : 'system',

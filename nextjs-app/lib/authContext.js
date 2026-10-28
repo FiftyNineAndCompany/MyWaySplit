@@ -153,6 +153,9 @@ export function AuthProvider({ children }) {
   };
 
   const signOut = async () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('mywaysplit_active_group_id');
+    }
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);

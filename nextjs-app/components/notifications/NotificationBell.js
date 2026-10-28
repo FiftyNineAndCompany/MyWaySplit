@@ -3,12 +3,28 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
+import {
+  playPhoneNotificationSound,
+  triggerDeviceNotification,
+  initAudioUnlock,
+  requestNotificationPermission,
+} from '@/lib/notificationSound';
 
 export default function NotificationBell() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [permissionState, setPermissionState] = useState('default');
   const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    // Unlock Web Audio context on first user touch/click
+    initAudioUnlock();
+
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setPermissionState(Notification.permission);
+    }
+  }, []);
 
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
@@ -35,7 +51,7 @@ export default function NotificationBell() {
 
     let channel = null;
     try {
-      // Use unique channel topic per mount so Supabase never reuses an already-subscribed channel
+      // Unique channel topic so Supabase never reuses an already-subscribed channel
       const channelId = `user-notifs-${user.id}-${Date.now()}`;
       channel = supabase
         .channel(channelId)
@@ -45,6 +61,15 @@ export default function NotificationBell() {
           payload => {
             if (payload?.new) {
               setNotifications(prev => [payload.new, ...prev]);
+
+              // 1. Play default phone notification sound & vibrate debtor's phone
+              playPhoneNotificationSound();
+
+              // 2. Trigger native OS phone notification (shows on lockscreen / status bar)
+              triggerDeviceNotification(
+                payload.new.title || '💰 MyWaySplit Payment Reminder',
+                payload.new.message || 'You have an unsettled balance to review.'
+              );
             }
           }
         )
@@ -128,22 +153,59 @@ export default function NotificationBell() {
 
       {isOpen && (
         <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white border border-slate-200/80 shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-slate-800 text-sm">Notifications</h3>
-              {unreadCount > 0 && (
-                <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  {unreadCount} new
-                </span>
-              )}
+          <div className="p-3.5 border-b border-slate-100 bg-slate-50/70 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-slate-800 text-sm">Notifications</h3>
+                {unreadCount > 0 && (
+                  <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    {unreadCount} new
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    playPhoneNotificationSound();
+                    triggerDeviceNotification('🔔 Sound Test', 'Default phone notification sound is working!');
+                  }}
+                  className="text-[11px] text-amber-600 hover:text-amber-800 font-semibold px-2 py-0.5 rounded-lg hover:bg-amber-50 border border-amber-200/80 transition flex items-center gap-1"
+                  title="Test phone chime sound & vibration"
+                >
+                  🔊 Test Sound
+                </button>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllAsRead}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
+                  >
+                    Mark read
+                  </button>
+                )}
+              </div>
             </div>
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllAsRead}
-                className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
-              >
-                Mark all read
-              </button>
+
+            {permissionState === 'default' && (
+              <div className="bg-indigo-50/80 rounded-xl p-2 flex items-center justify-between gap-2 border border-indigo-100">
+                <p className="text-[11px] text-indigo-800 leading-tight">
+                  Enable device sound & push alerts for reminders
+                </p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const res = await requestNotificationPermission();
+                    setPermissionState(res);
+                    if (res === 'granted') {
+                      playPhoneNotificationSound();
+                      triggerDeviceNotification('✅ Alerts Enabled', 'You will now receive phone notifications with sound!');
+                    }
+                  }}
+                  className="btn btn-primary text-[10px] py-1 px-2.5 shrink-0"
+                >
+                  Enable
+                </button>
+              </div>
             )}
           </div>
 
