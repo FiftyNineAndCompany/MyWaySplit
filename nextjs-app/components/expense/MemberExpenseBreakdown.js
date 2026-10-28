@@ -7,41 +7,112 @@ export default function MemberExpenseBreakdown({
   participants = [],
   expenses = [],
   currentUser,
+  currentUserName = 'You',
 }) {
   const [expandedMemberId, setExpandedMemberId] = useState(null);
-
-  // Strictly deduplicate participants
-  const uniqueParticipants = participants.filter((p, index, self) => {
-    return index === self.findIndex(t => (
-      (t.user_id && p.user_id && t.user_id === p.user_id) ||
-      (t.id && p.id && t.id === p.id) ||
-      (t.name && p.name && t.name.trim().toLowerCase() === p.name.trim().toLowerCase())
-    ));
-  });
 
   const activeExpenses = expenses.filter(e => !e.is_archived);
   const totalGroupSpend = activeExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
-  // Compute stats for each participant
-  const memberStats = uniqueParticipants.map(p => {
-    const isYou = (p.user_id && p.user_id === currentUser) || (p.id && p.id === currentUser);
+  // Set of all identifier variations for the currently logged-in user
+  const currentUserIdSet = new Set();
+  if (currentUser) {
+    currentUserIdSet.add(currentUser);
+  }
+  participants.forEach(p => {
+    if (p.user_id === currentUser || p.id === currentUser) {
+      if (p.id) currentUserIdSet.add(p.id);
+      if (p.user_id) currentUserIdSet.add(p.user_id);
+    }
+  });
 
-    // 1. All expenses paid by this participant
+  // Construct comprehensive member list from participants AND active expenses
+  const allMembers = [];
+
+  // 1. Add current user if not already present
+  const hasUserInParticipants = participants.some(
+    p => currentUserIdSet.has(p.id) || (p.user_id && currentUserIdSet.has(p.user_id))
+  );
+
+  if (currentUser && !hasUserInParticipants) {
+    allMembers.push({
+      id: currentUser,
+      user_id: currentUser,
+      name: currentUserName || 'You',
+      isYou: true,
+    });
+  }
+
+  // 2. Add existing participants
+  participants.forEach(p => {
+    const isYou = currentUserIdSet.has(p.id) || (p.user_id && currentUserIdSet.has(p.user_id));
+    allMembers.push({
+      ...p,
+      isYou,
+      name: isYou && currentUserName ? currentUserName : p.name,
+    });
+  });
+
+  // 3. Discover any payers from activeExpenses who might not have loaded in participants yet
+  activeExpenses.forEach(exp => {
+    if (!exp.paid_by) return;
+    const isCurrentUserPayer = currentUserIdSet.has(exp.paid_by);
+    const existing = allMembers.find(m => {
+      if (isCurrentUserPayer && m.isYou) return true;
+      return m.id === exp.paid_by || (m.user_id && m.user_id === exp.paid_by);
+    });
+
+    if (!existing) {
+      allMembers.push({
+        id: exp.paid_by,
+        user_id: isCurrentUserPayer ? currentUser : exp.paid_by,
+        name: isCurrentUserPayer ? (currentUserName || 'You') : 'Participant',
+        isYou: isCurrentUserPayer,
+      });
+    }
+  });
+
+  // 4. Strictly deduplicate members so no one appears twice
+  const uniqueMembers = allMembers.filter((m, index, self) => {
+    return index === self.findIndex(t => (
+      (t.isYou && m.isYou) ||
+      (t.user_id && m.user_id && t.user_id === m.user_id) ||
+      (t.id && m.id && t.id === m.id) ||
+      (t.name && m.name && t.name.trim().toLowerCase() === m.name.trim().toLowerCase())
+    ));
+  });
+
+  // Compute stats for each member
+  const memberStats = uniqueMembers.map(m => {
+    const isYou = m.isYou || currentUserIdSet.has(m.id) || (m.user_id && currentUserIdSet.has(m.user_id));
+
+    // 1. All expenses paid by this member
     const paidExpenses = activeExpenses.filter(e => {
-      return e.paid_by === p.id || (p.user_id && e.paid_by === p.user_id);
+      if (isYou) {
+        return currentUserIdSet.has(e.paid_by);
+      }
+      return e.paid_by === m.id || (m.user_id && e.paid_by === m.user_id);
     });
 
     const totalPaid = paidExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
-    // 2. Total share owed across all expenses
+    // 2. Total share owed by this member across all expenses
     let totalShare = 0;
     activeExpenses.forEach(exp => {
       const amount = Number(exp.amount) || 0;
+      if (amount <= 0) return;
+
       const splitList = Array.isArray(exp.split_among) && exp.split_among.length > 0
         ? exp.split_among
-        : uniqueParticipants.map(part => part.id);
+        : uniqueMembers.map(part => part.id);
 
-      const isInSplit = splitList.some(id => id === p.id || (p.user_id && id === p.user_id));
+      const isInSplit = splitList.some(id => {
+        if (isYou) {
+          return currentUserIdSet.has(id);
+        }
+        return id === m.id || (m.user_id && id === m.user_id);
+      });
+
       if (isInSplit && splitList.length > 0) {
         totalShare += amount / splitList.length;
       }
@@ -50,7 +121,7 @@ export default function MemberExpenseBreakdown({
     const netBalance = totalPaid - totalShare;
 
     return {
-      participant: p,
+      member: m,
       isYou,
       paidExpenses,
       totalPaid,
@@ -70,14 +141,14 @@ export default function MemberExpenseBreakdown({
     setExpandedMemberId(prev => (prev === id ? null : id));
   }
 
-  if (uniqueParticipants.length === 0) {
+  if (uniqueMembers.length === 0 && activeExpenses.length === 0) {
     return (
-      <div className="card p-6">
+      <div className="card p-6 text-center text-slate-500">
         <h2 className="text-xl font-bold font-display text-slate-800 mb-2">
           Member-Wise Expense Breakdown
         </h2>
         <p className="text-xs text-slate-400">
-          No members found in this group yet. Invite members to see their spending breakdown.
+          No expenses recorded yet. Add your first expense on the left to see each member&apos;s spending!
         </p>
       </div>
     );
@@ -93,7 +164,7 @@ export default function MemberExpenseBreakdown({
               Member-Wise Breakdown
             </h2>
             <span className="badge badge-primary text-xs">
-              {uniqueParticipants.length} {uniqueParticipants.length === 1 ? 'member' : 'members'}
+              {uniqueMembers.length} {uniqueMembers.length === 1 ? 'member' : 'members'}
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
@@ -102,7 +173,7 @@ export default function MemberExpenseBreakdown({
         </div>
 
         {/* Total Sheet Spend Pill */}
-        <div className="bg-indigo-50 border border-indigo-100 px-3.5 py-1.5 rounded-xl shrink-0 flex items-center gap-2">
+        <div className="bg-indigo-50 border border-indigo-100 px-3.5 py-1.5 rounded-xl shrink-0 flex items-center gap-2 self-start sm:self-auto">
           <span className="text-xs text-indigo-700 font-medium">Total Spend:</span>
           <span className="text-sm font-bold text-indigo-900 font-display">
             ₹{totalGroupSpend.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -112,15 +183,14 @@ export default function MemberExpenseBreakdown({
 
       {/* Member Cards */}
       <div className="space-y-3">
-        {memberStats.map(({ participant: p, isYou, paidExpenses, totalPaid, totalShare, netBalance }) => {
-          const isExpanded = expandedMemberId === p.id;
+        {memberStats.map(({ member: m, isYou, paidExpenses, totalPaid, totalShare, netBalance }) => {
+          const isExpanded = expandedMemberId === m.id;
           const isCreditor = netBalance > 0.01;
           const isDebtor = netBalance < -0.01;
-          const isSettled = !isCreditor && !isDebtor;
 
           return (
             <div
-              key={p.id}
+              key={m.id}
               className={`border rounded-2xl transition-all duration-200 ${
                 isYou
                   ? 'border-indigo-200 bg-indigo-50/20 shadow-sm'
@@ -138,22 +208,22 @@ export default function MemberExpenseBreakdown({
                         : 'bg-slate-100 text-slate-700'
                     }`}
                   >
-                    {p.name.charAt(0).toUpperCase()}
+                    {(m.name || 'U').charAt(0).toUpperCase()}
                   </div>
 
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-slate-800 text-sm">
-                        {p.name}
+                        {m.name}
                       </span>
                       {isYou && (
                         <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.2 bg-indigo-600 text-white rounded">
                           You
                         </span>
                       )}
-                      {p.upi_id && (
+                      {m.upi_id && (
                         <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full font-mono hidden sm:inline">
-                          UPI: {p.upi_id}
+                          UPI: {m.upi_id}
                         </span>
                       )}
                     </div>
@@ -189,7 +259,7 @@ export default function MemberExpenseBreakdown({
 
                   <button
                     type="button"
-                    onClick={() => toggleExpand(p.id)}
+                    onClick={() => toggleExpand(m.id)}
                     className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition flex items-center gap-1 text-xs font-medium"
                     title={isExpanded ? 'Hide breakdown' : 'View breakdown'}
                   >
@@ -214,7 +284,7 @@ export default function MemberExpenseBreakdown({
               {isExpanded && (
                 <div className="border-t border-slate-100 bg-slate-50/60 p-3 sm:p-4 rounded-b-2xl">
                   <h4 className="text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
-                    <span>Expenses Paid by {p.name} ({paidExpenses.length})</span>
+                    <span>Expenses Paid by {m.name} ({paidExpenses.length})</span>
                     <span className="text-[11px] text-slate-500 font-normal">
                       Total: ₹{totalPaid.toFixed(2)}
                     </span>
@@ -222,7 +292,7 @@ export default function MemberExpenseBreakdown({
 
                   {paidExpenses.length === 0 ? (
                     <p className="text-xs text-slate-400 italic py-2">
-                      {p.name} has not paid for any recorded expenses in this sheet yet.
+                      {m.name} has not paid for any recorded expenses in this sheet yet.
                     </p>
                   ) : (
                     <ul className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
@@ -234,7 +304,7 @@ export default function MemberExpenseBreakdown({
 
                         const splitCount = Array.isArray(exp.split_among) && exp.split_among.length > 0
                           ? exp.split_among.length
-                          : uniqueParticipants.length;
+                          : uniqueMembers.length;
 
                         return (
                           <li

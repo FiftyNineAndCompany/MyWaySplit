@@ -302,6 +302,14 @@ export default function Home() {
     setExpenses(prev => prev.map(e => (e.id === updatedExpense.id ? updatedExpense : e)));
   }, []);
 
+  const handleParticipantAdded = useCallback((newPart) => {
+    setParticipants(prev => {
+      const exists = prev.some(p => p.id === newPart.id || (p.user_id && p.user_id === newPart.user_id));
+      if (exists) return prev.map(p => (p.id === newPart.id ? newPart : p));
+      return [newPart, ...prev];
+    });
+  }, []);
+
   function handleSelectGroup(grp) {
     setActiveGroup(grp);
     if (grp?.id && typeof window !== 'undefined') {
@@ -414,26 +422,6 @@ export default function Home() {
               </>
             )}
 
-            {/* Top-Right Hamburger Menu Button for Transaction History */}
-            <button
-              type="button"
-              onClick={() => setHistoryDrawerOpen(true)}
-              className="btn bg-white/20 hover:bg-white/30 text-white border border-white/30 font-bold text-xs py-2 px-3.5 flex items-center gap-2 shadow-md backdrop-blur-sm"
-              title="Open Transaction History Menu"
-            >
-              <span className="flex flex-col gap-0.5 justify-center w-4 h-3">
-                <span className="w-full h-0.5 bg-white rounded-full"></span>
-                <span className="w-full h-0.5 bg-white rounded-full"></span>
-                <span className="w-full h-0.5 bg-white rounded-full"></span>
-              </span>
-              <span>History</span>
-              {expenses.length > 0 && (
-                <span className="bg-white text-indigo-900 text-[10px] font-black px-1.5 py-0.2 rounded-full">
-                  {expenses.length}
-                </span>
-              )}
-            </button>
-
             <Link
               href="/borrow"
               className="btn bg-indigo-900/60 text-indigo-200 hover:text-white hover:bg-indigo-900/80 border border-indigo-400/30 text-xs py-2 px-3"
@@ -507,6 +495,7 @@ export default function Home() {
               currentUserName={profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You'}
               onExpenseAdded={handleExpenseAdded}
               onExpenseUpdated={handleExpenseUpdated}
+              onParticipantAdded={handleParticipantAdded}
               onDataChange={loadGroupData}
             />
           </div>
@@ -562,21 +551,6 @@ export default function Home() {
                   )}
                 </button>
               </div>
-
-              {/* Hamburger Button to Open Slide-out Transaction History */}
-              <button
-                type="button"
-                onClick={() => setHistoryDrawerOpen(true)}
-                className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-2 shrink-0 self-start sm:self-auto"
-                title="View full transaction history in slide-out menu"
-              >
-                <span className="flex flex-col gap-0.5 justify-center w-3.5 h-3">
-                  <span className="w-full h-0.5 bg-slate-700 rounded-full"></span>
-                  <span className="w-full h-0.5 bg-slate-700 rounded-full"></span>
-                  <span className="w-full h-0.5 bg-slate-700 rounded-full"></span>
-                </span>
-                <span className="font-semibold text-slate-800">History ({expenses.length})</span>
-              </button>
             </div>
 
             {/* Active Tab View */}
@@ -585,6 +559,7 @@ export default function Home() {
                 participants={participants}
                 expenses={expenses}
                 currentUser={currentUserId}
+                currentUserName={profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You'}
               />
             ) : (
               <SettlementPlan

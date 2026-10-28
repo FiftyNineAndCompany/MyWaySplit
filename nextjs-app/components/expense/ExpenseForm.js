@@ -13,6 +13,7 @@ export default function ExpenseForm({
   currentUserName = 'You',
   onExpenseAdded,
   onExpenseUpdated,
+  onParticipantAdded,
   onDataChange,
 }) {
   const { showToast } = useToast();
@@ -159,6 +160,9 @@ export default function ExpenseForm({
 
           if (!createPartErr && newPart?.id) {
             finalPayerId = newPart.id;
+            if (onParticipantAdded) {
+              onParticipantAdded(newPart);
+            }
           }
         }
       }

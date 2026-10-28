@@ -31,7 +31,17 @@ export default function CreditorUpiCard({
     }
   }, [initialUpi]);
 
-  if (!currentUser || participants.length === 0) return null;
+  if (!currentUser) return null;
+
+  // Set of all identifier variations for the currently logged-in user
+  const currentUserIdSet = new Set();
+  if (currentUser) currentUserIdSet.add(currentUser);
+  participants.forEach(p => {
+    if (p.user_id === currentUser || p.id === currentUser) {
+      if (p.id) currentUserIdSet.add(p.id);
+      if (p.user_id) currentUserIdSet.add(p.user_id);
+    }
+  });
 
   // Calculate current user's net balance across active expenses
   let userPaid = 0;
@@ -44,7 +54,7 @@ export default function CreditorUpiCard({
     if (amount <= 0) return;
 
     // Check if user is the payer
-    const isPayer = exp.paid_by === currentUser || (userPart && exp.paid_by === userPart.id);
+    const isPayer = currentUserIdSet.has(exp.paid_by);
     if (isPayer) {
       userPaid += amount;
     }
@@ -54,9 +64,7 @@ export default function CreditorUpiCard({
       ? exp.split_among
       : participants.map(p => p.id);
 
-    const isInSplit = splitList.some(
-      id => id === currentUser || (userPart && id === userPart.id)
-    );
+    const isInSplit = splitList.length === 0 || splitList.some(id => currentUserIdSet.has(id));
 
     if (isInSplit && splitList.length > 0) {
       userShare += amount / splitList.length;
