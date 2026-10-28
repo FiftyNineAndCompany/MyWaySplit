@@ -5,9 +5,10 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/layout/Toast';
 
 export default function ParticipantManager({
-  participants,
+  participants = [],
   activeGroup,
   currentUser,
+  currentUserName = 'You',
   onDataChange,
 }) {
   const { showToast } = useToast();
@@ -19,8 +20,22 @@ export default function ParticipantManager({
 
   const activeGroupId = activeGroup?.id;
 
+  // Synthesize current logged-in user into participants if not already present
+  const baseParticipants = [...participants];
+  const hasUserInList = baseParticipants.some(
+    p => (p.user_id && p.user_id === currentUser) || (p.id && p.id === currentUser)
+  );
+
+  if (!hasUserInList && currentUser) {
+    baseParticipants.unshift({
+      id: currentUser,
+      user_id: currentUser,
+      name: currentUserName || 'You',
+    });
+  }
+
   // Strictly deduplicate participants by user_id, id, and normalized name
-  const uniqueParticipants = participants.filter((p, index, self) => {
+  const uniqueParticipants = baseParticipants.filter((p, index, self) => {
     return index === self.findIndex(t => (
       (t.user_id && p.user_id && t.user_id === p.user_id) ||
       (t.id && p.id && t.id === p.id) ||

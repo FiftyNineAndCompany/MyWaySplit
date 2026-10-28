@@ -87,6 +87,8 @@ export default function Home() {
           .single();
 
         if (newGroup && !createErr) {
+          const creatorName = profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'You';
+
           // Record creator in group_members as admin
           await supabase.from('group_members').insert([{
             group_id: newGroup.id,
@@ -95,6 +97,24 @@ export default function Home() {
             status: 'active',
           }]);
 
+          // Create creator participant row immediately
+          const { data: partData } = await supabase.from('participants').insert([{
+            group_id: newGroup.id,
+            user_id: user.id,
+            name: creatorName,
+            upi_id: profile?.upi_id || null,
+            phone: profile?.phone || null,
+          }]).select().maybeSingle();
+
+          const initialPart = {
+            id: partData?.id || user.id,
+            user_id: user.id,
+            name: creatorName,
+            upi_id: profile?.upi_id || '',
+            phone: profile?.phone || '',
+          };
+
+          setParticipants([initialPart]);
           setGroups([newGroup]);
           setActiveGroup(newGroup);
           if (typeof window !== 'undefined') {
@@ -175,10 +195,10 @@ export default function Home() {
       }
 
       // 2. Ensure current user is in participants list exactly once
-      const hasCurrentUser = list.some(p => p.user_id === user.id || p.id === user.id);
+      const hasCurrentUser = list.some(p => (p.user_id && p.user_id === user.id) || p.id === user.id);
 
-      if (!hasCurrentUser && activeGroup.created_by === user.id) {
-        const { data: newPartRow, error: npErr } = await supabase
+      if (!hasCurrentUser) {
+        const { data: newPartRow } = await supabase
           .from('participants')
           .insert([{
             group_id: activeGroup.id,
@@ -190,15 +210,13 @@ export default function Home() {
           .select()
           .maybeSingle();
 
-        if (!npErr && newPartRow) {
-          list.unshift({
-            id: newPartRow.id,
-            user_id: user.id,
-            name: newPartRow.name,
-            upi_id: newPartRow.upi_id || '',
-            phone: newPartRow.phone || '',
-          });
-        }
+        list.unshift({
+          id: newPartRow?.id || user.id,
+          user_id: user.id,
+          name: newPartRow?.name || currentUserName,
+          upi_id: newPartRow?.upi_id || profile?.upi_id || '',
+          phone: newPartRow?.phone || profile?.phone || '',
+        });
       }
 
       setParticipants(list);
@@ -407,6 +425,7 @@ export default function Home() {
               participants={participants}
               activeGroup={activeGroup}
               currentUser={currentUserId}
+              currentUserName={profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You'}
               onDataChange={loadGroupData}
             />
 
@@ -415,6 +434,7 @@ export default function Home() {
               activeGroup={activeGroup}
               activeGroupId={activeGroup?.id}
               currentUser={currentUserId}
+              currentUserName={profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You'}
               onDataChange={loadGroupData}
             />
           </div>

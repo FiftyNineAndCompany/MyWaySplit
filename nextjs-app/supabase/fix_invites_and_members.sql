@@ -132,7 +132,7 @@ BEGIN
     updated_at = now()
   WHERE id = auth.uid();
 
-  -- Upsert participant
+  -- Upsert participant for this group and user
   SELECT id INTO final_participant_id
   FROM participants
   WHERE group_id = target_group_id AND (user_id = auth.uid() OR id = auth.uid())
@@ -146,20 +146,14 @@ BEGIN
       phone = COALESCE(NULLIF(trim(phone_param), ''), phone)
     WHERE id = final_participant_id;
   ELSE
-    INSERT INTO participants (id, user_id, group_id, name, upi_id, phone)
+    INSERT INTO participants (user_id, group_id, name, upi_id, phone)
     VALUES (
-      auth.uid(),
       auth.uid(),
       target_group_id,
       chosen_name,
       NULLIF(trim(upi_id_param), ''),
       NULLIF(trim(phone_param), '')
     )
-    ON CONFLICT (id) DO UPDATE SET
-      group_id = target_group_id,
-      name = chosen_name,
-      upi_id = COALESCE(NULLIF(trim(upi_id_param), ''), participants.upi_id),
-      phone = COALESCE(NULLIF(trim(phone_param), ''), participants.phone)
     RETURNING id INTO final_participant_id;
   END IF;
 

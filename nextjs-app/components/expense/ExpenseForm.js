@@ -10,13 +10,13 @@ export default function ExpenseForm({
   activeGroup,
   activeGroupId,
   currentUser,
+  currentUserName = 'You',
   onDataChange,
 }) {
   const { showToast } = useToast();
   const currentGroupId = activeGroup?.id || activeGroupId;
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [payerId, setPayerId] = useState('');
   const [category, setCategory] = useState('food');
   const [editId, setEditId] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -24,8 +24,23 @@ export default function ExpenseForm({
   // Inclusions/Exclusions: Array of participant IDs who share this expense
   const [includedMemberIds, setIncludedMemberIds] = useState([]);
 
+  // Synthesize current logged-in user into participants list if not already present
+  const baseParticipants = [...participants];
+  const hasCurrentUserInList = baseParticipants.some(
+    p => (p.user_id && p.user_id === currentUser) || (p.id && p.id === currentUser)
+  );
+
+  if (!hasCurrentUserInList && currentUser) {
+    baseParticipants.unshift({
+      id: currentUser,
+      user_id: currentUser,
+      name: currentUserName || 'You',
+      isCurrentUser: true,
+    });
+  }
+
   // Strictly deduplicate participants by user_id, id, and normalized name so no person appears twice
-  const uniqueParticipants = participants.filter((p, index, self) => {
+  const uniqueParticipants = baseParticipants.filter((p, index, self) => {
     return index === self.findIndex(t => (
       (t.user_id && p.user_id && t.user_id === p.user_id) ||
       (t.id && p.id && t.id === p.id) ||
@@ -33,11 +48,24 @@ export default function ExpenseForm({
     ));
   });
 
+  // Find current user's participant entry for immediate default selection
+  const currentUserPart = uniqueParticipants.find(
+    p => (p.user_id && p.user_id === currentUser) || (p.id && p.id === currentUser) || p.isCurrentUser
+  );
+  const initialDefaultPayerId = currentUserPart ? currentUserPart.id : (uniqueParticipants[0]?.id || currentUser || '');
+
+  // Default payerId directly on initial mount to logged-in member
+  const [payerId, setPayerId] = useState(initialDefaultPayerId);
+
   // Auto-default payer to current user or first participant, and sync included members
   useEffect(() => {
     if (uniqueParticipants.length > 0) {
+      const userPart = uniqueParticipants.find(
+        p => (p.user_id && p.user_id === currentUser) || (p.id && p.id === currentUser) || p.isCurrentUser
+      );
+
+      // If no payer selected or current payerId is no longer in list, default to current user
       if (!payerId || !uniqueParticipants.some(p => p.id === payerId)) {
-        const userPart = uniqueParticipants.find(p => p.user_id === currentUser || p.id === currentUser);
         if (userPart) {
           setPayerId(userPart.id);
         } else if (uniqueParticipants[0]) {
@@ -100,12 +128,51 @@ export default function ExpenseForm({
 
     setLoading(true);
     try {
+      // Resolve payerId to ensure it matches a real participant row in Supabase
+      let finalPayerId = payerId;
+      const matchingPart = participants.find(p => p.id === payerId);
+
+      if (!matchingPart || matchingPart.id === currentUser) {
+        // Query database for existing participant record
+        const { data: dbPart } = await supabase
+          .from('participants')
+          .select('id')
+          .eq('group_id', currentGroupId)
+          .eq('user_id', currentUser)
+          .maybeSingle();
+
+        if (dbPart?.id) {
+          finalPayerId = dbPart.id;
+        } else {
+          // Create the participant row for current user in this group
+          const { data: newPart, error: createPartErr } = await supabase
+            .from('participants')
+            .insert([{
+              group_id: currentGroupId,
+              user_id: currentUser,
+              name: currentUserName || 'You',
+            }])
+            .select()
+            .maybeSingle();
+
+          if (!createPartErr && newPart?.id) {
+            finalPayerId = newPart.id;
+          }
+        }
+      }
+
+      // Resolve split_among array with valid participant IDs
+      const resolvedSplitAmong = includedMemberIds.map(id => {
+        if (id === currentUser) return finalPayerId;
+        return id;
+      });
+
       const expensePayload = {
         description: description.trim(),
         amount: parsedAmount,
-        paid_by: payerId,
+        paid_by: finalPayerId,
         category,
-        split_among: includedMemberIds,
+        split_among: resolvedSplitAmong.length > 0 ? resolvedSplitAmong : [finalPayerId],
         group_id: currentGroupId,
         is_archived: false,
       };
@@ -141,9 +208,11 @@ export default function ExpenseForm({
     setAmount('');
     setCategory('food');
     // Re-default payer to current user
-    const userPart = participants.find(p => p.user_id === currentUser || p.id === currentUser);
-    setPayerId(userPart ? userPart.id : (participants[0]?.id || ''));
-    setIncludedMemberIds(participants.map(p => p.id));
+    const userPart = uniqueParticipants.find(
+      p => (p.user_id && p.user_id === currentUser) || (p.id && p.id === currentUser) || p.isCurrentUser
+    );
+    setPayerId(userPart ? userPart.id : (uniqueParticipants[0]?.id || currentUser || ''));
+    setIncludedMemberIds(uniqueParticipants.map(p => p.id));
   }
 
   // Window bridge for edit trigger from ExpenseList
@@ -168,6 +237,12 @@ export default function ExpenseForm({
   const perPersonPreview = (Number(amount) > 0 && includedMemberIds.length > 0)
     ? (Number(amount) / includedMemberIds.length).toFixed(2)
     : '0.00';
+
+  // Compute selected payer for display and verification
+  const selectedPayer = uniqueParticipants.find(p => p.id === payerId) ||
+    uniqueParticipants.find(p => (p.user_id && p.user_id === currentUser) || (p.id && p.id === currentUser) || p.isCurrentUser) ||
+    uniqueParticipants[0];
+  const selectedPayerName = selectedPayer ? selectedPayer.name : (currentUserName || 'You');
 
   return (
     <div className="card p-6 fade-in-up">
@@ -236,20 +311,47 @@ export default function ExpenseForm({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Paid By *</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-slate-700">Paid By *</label>
+              <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                Default: {currentUserName || 'You'}
+              </span>
+            </div>
             <select
               required
               value={payerId}
               onChange={e => setPayerId(e.target.value)}
               className="input select font-medium text-slate-800"
             >
-              <option value="">Who paid?</option>
-              {uniqueParticipants.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name} {p.user_id === currentUser || p.id === currentUser ? '(You)' : ''}
+              {uniqueParticipants.length === 0 ? (
+                <option value={currentUser || ''}>
+                  {currentUserName || 'You'} (You - Default)
                 </option>
-              ))}
+              ) : (
+                uniqueParticipants.map(p => {
+                  const isYou = (p.user_id && p.user_id === currentUser) || (p.id && p.id === currentUser) || p.isCurrentUser;
+                  return (
+                    <option key={p.id} value={p.id}>
+                      {p.name} {isYou ? '(You - Default)' : ''}
+                    </option>
+                  );
+                })
+              )}
             </select>
+
+            {/* Clear Paid By confirmation banner under the Paid By section */}
+            <div className="mt-1.5 flex items-center justify-between px-2.5 py-1.5 bg-emerald-50/80 border border-emerald-200/70 rounded-lg text-xs">
+              <div className="flex items-center gap-1.5 text-emerald-800 font-medium truncate">
+                <span className="text-emerald-600 font-bold">✓</span>
+                <span className="truncate">
+                  Paid by: <strong className="font-bold text-emerald-950">{selectedPayerName}</strong>
+                  {selectedPayer && ((selectedPayer.user_id && selectedPayer.user_id === currentUser) || (selectedPayer.id && selectedPayer.id === currentUser) || selectedPayer.isCurrentUser) ? ' (You)' : ''}
+                </span>
+              </div>
+              <span className="text-[10px] text-emerald-700 font-semibold uppercase tracking-wider shrink-0 ml-1">
+                Payer
+              </span>
+            </div>
           </div>
         </div>
 
