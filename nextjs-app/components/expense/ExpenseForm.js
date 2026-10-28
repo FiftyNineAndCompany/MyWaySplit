@@ -11,6 +11,8 @@ export default function ExpenseForm({
   activeGroupId,
   currentUser,
   currentUserName = 'You',
+  onExpenseAdded,
+  onExpenseUpdated,
   onDataChange,
 }) {
   const { showToast } = useToast();
@@ -178,18 +180,35 @@ export default function ExpenseForm({
       };
 
       if (editId) {
-        const { error } = await supabase
+        const { data: updatedData, error } = await supabase
           .from('expenses')
           .update(expensePayload)
-          .eq('id', editId);
+          .eq('id', editId)
+          .select()
+          .maybeSingle();
         if (error) throw error;
         showToast('Expense updated successfully!', 'success');
+        if (onExpenseUpdated) {
+          onExpenseUpdated(updatedData || { id: editId, ...expensePayload });
+        }
       } else {
-        const { error } = await supabase
+        const { data: insertedData, error } = await supabase
           .from('expenses')
-          .insert([expensePayload]);
+          .insert([expensePayload])
+          .select()
+          .maybeSingle();
         if (error) throw error;
         showToast('Expense recorded!', 'success');
+
+        // Instant Optimistic UI Update so user sees it in 0ms
+        const newRecord = insertedData || {
+          id: crypto.randomUUID(),
+          ...expensePayload,
+          created_at: new Date().toISOString(),
+        };
+        if (onExpenseAdded) {
+          onExpenseAdded(newRecord);
+        }
       }
 
       resetForm();

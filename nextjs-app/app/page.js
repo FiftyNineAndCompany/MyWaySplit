@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/authContext';
 import GroupManager from '@/components/groups/GroupManager';
-import ParticipantManager from '@/components/expense/ParticipantManager';
 import ExpenseForm from '@/components/expense/ExpenseForm';
-import ExpenseList from '@/components/expense/ExpenseList';
 import SettlementPlan from '@/components/expense/SettlementPlan';
+import MemberExpenseBreakdown from '@/components/expense/MemberExpenseBreakdown';
+import CreditorUpiCard from '@/components/expense/CreditorUpiCard';
+import TransactionHistoryDrawer from '@/components/expense/TransactionHistoryDrawer';
 import OneSignalProvider from '@/components/notifications/OneSignalProvider';
 import NotificationPermissionBanner from '@/components/notifications/NotificationPermissionBanner';
 import MandatoryLogin from '@/components/auth/MandatoryLogin';
@@ -22,6 +23,8 @@ export default function Home() {
   const [participants, setParticipants] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('breakdown'); // 'breakdown' | 'settlements'
 
   // 1. Load Groups for Authenticated User (Strictly isolated by user ownership & active membership)
   const loadGroups = useCallback(async () => {
@@ -245,6 +248,60 @@ export default function Home() {
     loadGroupData();
   }, [loadGroupData]);
 
+  // Realtime subscription for expenses on active group
+  useEffect(() => {
+    if (!activeGroup?.id) return;
+
+    const channel = supabase
+      .channel(`realtime_expenses_${activeGroup.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'expenses',
+          filter: `group_id=eq.${activeGroup.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setExpenses(prev => {
+              if (prev.some(e => e.id === payload.new.id)) return prev;
+              return [payload.new, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setExpenses(prev => prev.map(e => (e.id === payload.new.id ? payload.new : e)));
+          } else if (payload.eventType === 'DELETE') {
+            setExpenses(prev => prev.filter(e => e.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeGroup?.id]);
+
+  // Window bridge for opening history drawer from anywhere (e.g. Header)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.__mws_openHistoryDrawer = () => setHistoryDrawerOpen(true);
+    }
+  }, []);
+
+  // Optimistic UI update handlers for instant responsiveness (0ms)
+  const handleExpenseAdded = useCallback((newExpense) => {
+    setExpenses(prev => {
+      const exists = prev.some(e => e.id === newExpense.id);
+      if (exists) return prev.map(e => (e.id === newExpense.id ? newExpense : e));
+      return [newExpense, ...prev];
+    });
+  }, []);
+
+  const handleExpenseUpdated = useCallback((updatedExpense) => {
+    setExpenses(prev => prev.map(e => (e.id === updatedExpense.id ? updatedExpense : e)));
+  }, []);
+
   function handleSelectGroup(grp) {
     setActiveGroup(grp);
     if (grp?.id && typeof window !== 'undefined') {
@@ -356,6 +413,27 @@ export default function Home() {
                 </button>
               </>
             )}
+
+            {/* Top-Right Hamburger Menu Button for Transaction History */}
+            <button
+              type="button"
+              onClick={() => setHistoryDrawerOpen(true)}
+              className="btn bg-white/20 hover:bg-white/30 text-white border border-white/30 font-bold text-xs py-2 px-3.5 flex items-center gap-2 shadow-md backdrop-blur-sm"
+              title="Open Transaction History Menu"
+            >
+              <span className="flex flex-col gap-0.5 justify-center w-4 h-3">
+                <span className="w-full h-0.5 bg-white rounded-full"></span>
+                <span className="w-full h-0.5 bg-white rounded-full"></span>
+                <span className="w-full h-0.5 bg-white rounded-full"></span>
+              </span>
+              <span>History</span>
+              {expenses.length > 0 && (
+                <span className="bg-white text-indigo-900 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                  {expenses.length}
+                </span>
+              )}
+            </button>
+
             <Link
               href="/borrow"
               className="btn bg-indigo-900/60 text-indigo-200 hover:text-white hover:bg-indigo-900/80 border border-indigo-400/30 text-xs py-2 px-3"
@@ -417,46 +495,118 @@ export default function Home() {
           </p>
         </div>
       ) : (
-        /* Main Expense Splitting Grid */
+        /* Main Clean Splitting Grid (Clean layout: Sheet Members & History moved off main page) */
         <div id="split-section" className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-start">
-          {/* Left Column: Sheet Members & Expense Form */}
+          {/* Left Column: Expense Form */}
           <div className="lg:col-span-5 space-y-6">
-            <ParticipantManager
-              participants={participants}
-              activeGroup={activeGroup}
-              currentUser={currentUserId}
-              currentUserName={profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You'}
-              onDataChange={loadGroupData}
-            />
-
             <ExpenseForm
               participants={participants}
               activeGroup={activeGroup}
               activeGroupId={activeGroup?.id}
               currentUser={currentUserId}
               currentUserName={profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You'}
+              onExpenseAdded={handleExpenseAdded}
+              onExpenseUpdated={handleExpenseUpdated}
               onDataChange={loadGroupData}
             />
           </div>
 
-          {/* Right Column: Final Settlements & History */}
-          <div className="lg:col-span-7 space-y-6">
-            <SettlementPlan
+          {/* Right Column: Creditor UPI ID, Member-Wise Breakdown & Final Settlements */}
+          <div className="lg:col-span-7 space-y-5">
+            {/* Conditional UPI ID field (Only displayed if current user is calculated as a creditor!) */}
+            <CreditorUpiCard
               participants={participants}
               expenses={expenses}
               currentUser={currentUserId}
+              currentUserName={profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You'}
+              profile={profile}
               activeGroupId={activeGroup?.id}
-            />
-
-            <ExpenseList
-              expenses={expenses}
-              participants={participants}
-              currentUser={currentUserId}
               onDataChange={loadGroupData}
             />
+
+            {/* View Switcher Tabs: Member-Wise Breakdown vs Final Settlements */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('breakdown')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeTab === 'breakdown'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>👥 Member Breakdown</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('settlements')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeTab === 'settlements'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>💸 Final Settlements</span>
+                  {settlements.length > 0 && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                        activeTab === 'settlements'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-indigo-100 text-indigo-800'
+                      }`}
+                    >
+                      {settlements.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* Hamburger Button to Open Slide-out Transaction History */}
+              <button
+                type="button"
+                onClick={() => setHistoryDrawerOpen(true)}
+                className="btn btn-secondary text-xs py-1.5 px-3 flex items-center gap-2 shrink-0 self-start sm:self-auto"
+                title="View full transaction history in slide-out menu"
+              >
+                <span className="flex flex-col gap-0.5 justify-center w-3.5 h-3">
+                  <span className="w-full h-0.5 bg-slate-700 rounded-full"></span>
+                  <span className="w-full h-0.5 bg-slate-700 rounded-full"></span>
+                  <span className="w-full h-0.5 bg-slate-700 rounded-full"></span>
+                </span>
+                <span className="font-semibold text-slate-800">History ({expenses.length})</span>
+              </button>
+            </div>
+
+            {/* Active Tab View */}
+            {activeTab === 'breakdown' ? (
+              <MemberExpenseBreakdown
+                participants={participants}
+                expenses={expenses}
+                currentUser={currentUserId}
+              />
+            ) : (
+              <SettlementPlan
+                participants={participants}
+                expenses={expenses}
+                currentUser={currentUserId}
+                activeGroupId={activeGroup?.id}
+              />
+            )}
           </div>
         </div>
       )}
+
+      {/* Slide-out Transaction History Drawer (Opened via top-right hamburger menu) */}
+      <TransactionHistoryDrawer
+        isOpen={historyDrawerOpen}
+        onClose={() => setHistoryDrawerOpen(false)}
+        expenses={expenses}
+        participants={participants}
+        currentUser={currentUserId}
+        onDataChange={loadGroupData}
+      />
     </div>
   );
 }

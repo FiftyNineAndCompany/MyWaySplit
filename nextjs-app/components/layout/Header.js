@@ -65,6 +65,25 @@ export default function Header() {
           {/* In-App Notifications */}
           <NotificationBell />
 
+          {/* Top-Right Hamburger Menu Button for Transaction History */}
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.__mws_openHistoryDrawer) {
+                window.__mws_openHistoryDrawer();
+              }
+            }}
+            className="btn btn-ghost text-xs px-2.5 py-1.5 text-slate-700 hover:text-indigo-600 flex items-center gap-1.5 border border-slate-200/80 rounded-xl hover:bg-indigo-50/50 transition"
+            title="Open Transaction History"
+          >
+            <svg className="w-4 h-4 text-slate-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+            <span className="font-bold">History</span>
+          </button>
+
           {/* User Profile or Sign In Button */}
           {user ? (
             <div className="flex items-center gap-2">
@@ -103,6 +122,24 @@ export default function Header() {
 
         {/* Mobile Actions (< md screens) */}
         <div className="flex md:hidden items-center gap-2 shrink-0">
+          {/* Top-Right Hamburger Menu Button for Transaction History on Mobile */}
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.__mws_openHistoryDrawer) {
+                window.__mws_openHistoryDrawer();
+              }
+            }}
+            className="p-1.5 text-slate-700 hover:text-indigo-600 rounded-lg hover:bg-slate-100 transition"
+            title="Open Transaction History"
+          >
+            <svg className="w-5 h-5 text-slate-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+
           {user ? (
             <>
               <NotificationBell />
