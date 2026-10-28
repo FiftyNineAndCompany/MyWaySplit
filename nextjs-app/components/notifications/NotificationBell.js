@@ -26,8 +26,30 @@ export default function NotificationBell() {
     }
   }, []);
 
+  const knownNotificationIdsRef = useRef(new Set());
+  const isInitialFetchRef = useRef(true);
+
+  // Helper to handle an incoming new notification with guaranteed phone chime & vibration
+  const handleIncomingNotification = useCallback((notif) => {
+    if (!notif?.id) return;
+    if (knownNotificationIdsRef.current.has(notif.id)) return;
+    knownNotificationIdsRef.current.add(notif.id);
+
+    // Update notifications list
+    setNotifications(prev => [notif, ...prev.filter(n => n.id !== notif.id)]);
+
+    // 1. Play default phone notification sound & vibrate debtor's phone
+    playPhoneNotificationSound();
+
+    // 2. Trigger native OS phone notification (shows on lockscreen / status bar)
+    triggerDeviceNotification(
+      notif.title || '💰 MyWaySplit Payment Reminder',
+      notif.message || 'You have an unsettled balance to review.'
+    );
+  }, []);
+
   const fetchNotifications = useCallback(async () => {
-    if (!user) return;
+    if (!user?.id) return;
     try {
       const { data } = await supabase
         .from('notifications')
@@ -37,12 +59,25 @@ export default function NotificationBell() {
         .limit(10);
 
       if (data) {
-        setNotifications(data);
+        if (isInitialFetchRef.current) {
+          // On first load, seed known IDs without playing sound for past notifications
+          data.forEach(n => knownNotificationIdsRef.current.add(n.id));
+          isInitialFetchRef.current = false;
+          setNotifications(data);
+        } else {
+          // Check if any brand new notification arrived!
+          const newNotifs = data.filter(n => !knownNotificationIdsRef.current.has(n.id));
+          if (newNotifs.length > 0) {
+            newNotifs.forEach(n => handleIncomingNotification(n));
+          } else {
+            setNotifications(data);
+          }
+        }
       }
     } catch (err) {
       console.warn('Error fetching notifications:', err);
     }
-  }, [user]);
+  }, [user?.id, handleIncomingNotification]);
 
   useEffect(() => {
     fetchNotifications();
@@ -60,16 +95,7 @@ export default function NotificationBell() {
           { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
           payload => {
             if (payload?.new) {
-              setNotifications(prev => [payload.new, ...prev]);
-
-              // 1. Play default phone notification sound & vibrate debtor's phone
-              playPhoneNotificationSound();
-
-              // 2. Trigger native OS phone notification (shows on lockscreen / status bar)
-              triggerDeviceNotification(
-                payload.new.title || '💰 MyWaySplit Payment Reminder',
-                payload.new.message || 'You have an unsettled balance to review.'
-              );
+              handleIncomingNotification(payload.new);
             }
           }
         )
@@ -82,12 +108,19 @@ export default function NotificationBell() {
       console.warn('Realtime channel setup error:', err);
     }
 
+    // 4-second reactive polling fallback to guarantee notification delivery and sound
+    // even if Supabase Realtime WebSocket drops or table is not in publication
+    const pollInterval = setInterval(() => {
+      fetchNotifications();
+    }, 4000);
+
     return () => {
+      clearInterval(pollInterval);
       if (channel) {
         supabase.removeChannel(channel);
       }
     };
-  }, [user?.id, fetchNotifications]);
+  }, [user?.id, fetchNotifications, handleIncomingNotification]);
 
   // Click outside to close
   useEffect(() => {

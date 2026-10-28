@@ -10,6 +10,7 @@ import ExpenseForm from '@/components/expense/ExpenseForm';
 import ExpenseList from '@/components/expense/ExpenseList';
 import SettlementPlan from '@/components/expense/SettlementPlan';
 import OneSignalProvider from '@/components/notifications/OneSignalProvider';
+import NotificationPermissionBanner from '@/components/notifications/NotificationPermissionBanner';
 import MandatoryLogin from '@/components/auth/MandatoryLogin';
 import { calculateSettlements } from '@/lib/splitEngine';
 
@@ -94,15 +95,6 @@ export default function Home() {
             status: 'active',
           }]);
 
-          // Add creator as first participant in their fresh sheet
-          await supabase.from('participants').insert([{
-            user_id: user.id,
-            group_id: newGroup.id,
-            name: currentUserName === 'My' ? 'You' : currentUserName,
-            upi_id: profile?.upi_id || null,
-            phone: profile?.phone || null,
-          }]);
-
           setGroups([newGroup]);
           setActiveGroup(newGroup);
           if (typeof window !== 'undefined') {
@@ -129,28 +121,63 @@ export default function Home() {
     }
 
     try {
-      // 1. Fetch participants strictly for this active group
+      // 1. Fetch participants strictly for active group
       const { data: partRows, error: pErr } = await supabase
         .from('participants')
         .select('*')
         .eq('group_id', activeGroup.id);
 
       let list = [];
+      const currentUserName = profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'You';
+
       if (!pErr && partRows && partRows.length > 0) {
-        list = partRows.map(p => ({
-          id: p.id,
-          user_id: p.user_id || p.id,
-          name: p.name,
-          upi_id: p.upi_id || '',
-          phone: p.phone || '',
-        }));
+        // Strict deduplication: keep only ONE participant record per user_id or id
+        const seenUserIds = new Set();
+        const seenIds = new Set();
+        const duplicateIdsToDelete = [];
+
+        for (const p of partRows) {
+          const isCurrentUser = (p.user_id && p.user_id === user.id) || p.id === user.id;
+
+          if (isCurrentUser) {
+            if (seenUserIds.has(user.id)) {
+              duplicateIdsToDelete.push(p.id);
+              continue;
+            }
+            seenUserIds.add(user.id);
+          } else if (p.user_id) {
+            if (seenUserIds.has(p.user_id)) {
+              duplicateIdsToDelete.push(p.id);
+              continue;
+            }
+            seenUserIds.add(p.user_id);
+          }
+
+          if (seenIds.has(p.id)) {
+            duplicateIdsToDelete.push(p.id);
+            continue;
+          }
+          seenIds.add(p.id);
+
+          list.push({
+            id: p.id,
+            user_id: p.user_id || p.id,
+            name: p.name,
+            upi_id: p.upi_id || '',
+            phone: p.phone || '',
+          });
+        }
+
+        // Clean up duplicate participant rows from DB in background
+        if (duplicateIdsToDelete.length > 0) {
+          supabase.from('participants').delete().in('id', duplicateIdsToDelete).catch(() => {});
+        }
       }
 
-      // 2. Ensure current user is in participants list for the sheet
-      const currentUserName = profile?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'You';
-      const existingUserPart = list.find(p => p.user_id === user.id || p.id === user.id);
+      // 2. Ensure current user is in participants list exactly once
+      const hasCurrentUser = list.some(p => p.user_id === user.id || p.id === user.id);
 
-      if (!existingUserPart && activeGroup.created_by === user.id) {
+      if (!hasCurrentUser && activeGroup.created_by === user.id) {
         const { data: newPartRow, error: npErr } = await supabase
           .from('participants')
           .insert([{
@@ -242,6 +269,9 @@ export default function Home() {
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 w-full max-w-full overflow-x-hidden">
       {/* Device Locking & Push Listener */}
       <OneSignalProvider currentUser={currentUserId} />
+
+      {/* Prominent Phone Notification & Sound Activation Banner */}
+      <NotificationPermissionBanner />
 
       {/* Hero Header */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-950 text-white p-6 sm:p-8 shadow-xl">

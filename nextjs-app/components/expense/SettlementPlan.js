@@ -6,9 +6,18 @@ import WhatsAppReminder from '@/components/payment/WhatsAppReminder';
 import ReminderButton from '@/components/notifications/ReminderButton';
 
 export default function SettlementPlan({ participants, expenses, currentUser, activeGroupId }) {
-  const settlements = calculateSettlements(participants, expenses);
+  // Deduplicate participants to ensure accurate settlement calculations
+  const uniqueParticipants = participants.filter((p, index, self) => {
+    return index === self.findIndex(t => (
+      (t.user_id && p.user_id && t.user_id === p.user_id) ||
+      (t.id && p.id && t.id === p.id) ||
+      (t.name && p.name && t.name.trim().toLowerCase() === p.name.trim().toLowerCase())
+    ));
+  });
 
-  if (participants.length === 0 || expenses.length === 0) {
+  const settlements = calculateSettlements(uniqueParticipants, expenses);
+
+  if (uniqueParticipants.length === 0 || expenses.length === 0) {
     return (
       <div className="card p-6">
         <div className="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">

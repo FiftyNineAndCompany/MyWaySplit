@@ -19,10 +19,24 @@ export default function ParticipantManager({
 
   const activeGroupId = activeGroup?.id;
 
+  // Strictly deduplicate participants by user_id, id, and normalized name
+  const uniqueParticipants = participants.filter((p, index, self) => {
+    return index === self.findIndex(t => (
+      (t.user_id && p.user_id && t.user_id === p.user_id) ||
+      (t.id && p.id && t.id === p.id) ||
+      (t.name && p.name && t.name.trim().toLowerCase() === p.name.trim().toLowerCase())
+    ));
+  });
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (!name.trim()) return showToast('Name is required.', 'error');
     if (!activeGroupId) return showToast('Please select or create an expense group first.', 'error');
+
+    // Prevent duplicate member names
+    if (!editId && uniqueParticipants.some(p => p.name.trim().toLowerCase() === name.trim().toLowerCase())) {
+      return showToast(`"${name.trim()}" is already a member of this sheet.`, 'error');
+    }
 
     setLoading(true);
     try {
@@ -99,16 +113,16 @@ export default function ParticipantManager({
         <h2 className="text-xl font-bold font-display text-slate-800">
           {editId ? 'Edit Sheet Member' : '1. Sheet Members'}
         </h2>
-        <span className="badge badge-primary">{participants.length}</span>
+        <span className="badge badge-primary">{uniqueParticipants.length}</span>
       </div>
 
       {/* Participant chips */}
       <div className="bg-slate-50 rounded-xl p-3 min-h-[56px] border border-slate-100 mb-5">
-        {participants.length === 0 ? (
+        {uniqueParticipants.length === 0 ? (
           <p className="text-slate-400 italic text-sm">No members added yet. Share your invite link or add members below.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {participants.map(p => {
+            {uniqueParticipants.map(p => {
               const isYou = p.id === currentUser || p.user_id === currentUser;
               return (
                 <div

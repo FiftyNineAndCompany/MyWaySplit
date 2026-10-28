@@ -24,23 +24,32 @@ export default function ExpenseForm({
   // Inclusions/Exclusions: Array of participant IDs who share this expense
   const [includedMemberIds, setIncludedMemberIds] = useState([]);
 
+  // Strictly deduplicate participants by user_id, id, and normalized name so no person appears twice
+  const uniqueParticipants = participants.filter((p, index, self) => {
+    return index === self.findIndex(t => (
+      (t.user_id && p.user_id && t.user_id === p.user_id) ||
+      (t.id && p.id && t.id === p.id) ||
+      (t.name && p.name && t.name.trim().toLowerCase() === p.name.trim().toLowerCase())
+    ));
+  });
+
   // Auto-default payer to current user or first participant, and sync included members
   useEffect(() => {
-    if (participants.length > 0) {
-      if (!payerId || !participants.some(p => p.id === payerId)) {
-        const userPart = participants.find(p => p.user_id === currentUser || p.id === currentUser);
+    if (uniqueParticipants.length > 0) {
+      if (!payerId || !uniqueParticipants.some(p => p.id === payerId)) {
+        const userPart = uniqueParticipants.find(p => p.user_id === currentUser || p.id === currentUser);
         if (userPart) {
           setPayerId(userPart.id);
-        } else if (participants[0]) {
-          setPayerId(participants[0].id);
+        } else if (uniqueParticipants[0]) {
+          setPayerId(uniqueParticipants[0].id);
         }
       }
 
       if (includedMemberIds.length === 0) {
-        setIncludedMemberIds(participants.map(p => p.id));
+        setIncludedMemberIds(uniqueParticipants.map(p => p.id));
       }
     }
-  }, [participants, currentUser, payerId, includedMemberIds.length]);
+  }, [uniqueParticipants, currentUser, payerId, includedMemberIds.length]);
 
   function toggleMemberInclusion(id) {
     if (includedMemberIds.includes(id)) {
@@ -55,7 +64,7 @@ export default function ExpenseForm({
   }
 
   function selectAllMembers() {
-    setIncludedMemberIds(participants.map(p => p.id));
+    setIncludedMemberIds(uniqueParticipants.map(p => p.id));
   }
 
   function handleShareInvite() {
@@ -235,8 +244,10 @@ export default function ExpenseForm({
               className="input select font-medium text-slate-800"
             >
               <option value="">Who paid?</option>
-              {participants.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+              {uniqueParticipants.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name} {p.user_id === currentUser || p.id === currentUser ? '(You)' : ''}
+                </option>
               ))}
             </select>
           </div>
@@ -268,19 +279,19 @@ export default function ExpenseForm({
         </div>
 
         {/* Advanced Splitting: Selective Inclusions / Exclusions */}
-        {participants.length > 0 && (
+        {uniqueParticipants.length > 0 && (
           <div className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-2.5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-slate-800">Split Among Members</p>
                 <p className="text-[10px] text-slate-500">
-                  {includedMemberIds.length === participants.length
+                  {includedMemberIds.length === uniqueParticipants.length
                     ? 'Split equally among all members'
-                    : `Split among ${includedMemberIds.length} of ${participants.length} members`}
+                    : `Split among ${includedMemberIds.length} of ${uniqueParticipants.length} members`}
                 </p>
               </div>
 
-              {includedMemberIds.length !== participants.length && (
+              {includedMemberIds.length !== uniqueParticipants.length && (
                 <button
                   type="button"
                   onClick={selectAllMembers}
@@ -293,8 +304,9 @@ export default function ExpenseForm({
 
             {/* Member Checkbox Chips */}
             <div className="flex flex-wrap gap-2">
-              {participants.map(p => {
+              {uniqueParticipants.map(p => {
                 const isIncluded = includedMemberIds.includes(p.id);
+                const isYou = p.user_id === currentUser || p.id === currentUser;
                 return (
                   <button
                     key={p.id}
@@ -307,7 +319,7 @@ export default function ExpenseForm({
                     }`}
                   >
                     <span>{isIncluded ? '✓' : '✕'}</span>
-                    <span>{p.name}</span>
+                    <span>{p.name}{isYou ? ' (You)' : ''}</span>
                   </button>
                 );
               })}

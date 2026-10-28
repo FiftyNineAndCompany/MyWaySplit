@@ -344,3 +344,18 @@ BEGIN
   END IF;
 END $$;
 
+-- 9. ENABLE REALTIME PUBLICATION FOR NOTIFICATIONS TABLE
+-- Enables Supabase Realtime to broadcast new payment reminders immediately to debtor devices
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'notifications'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;
+
+

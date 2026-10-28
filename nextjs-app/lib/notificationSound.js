@@ -70,7 +70,17 @@ export function playPhoneNotificationSound() {
     } catch (_) {}
   }
 
-  // 2. Web Audio API Chime Synthesis
+  // 2. Play Dedicated Sound File (/sounds/bell.wav)
+  try {
+    const audio = new Audio('/sounds/bell.wav');
+    audio.volume = 1.0;
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {});
+    }
+  } catch (_) {}
+
+  // 3. Web Audio API Chime Synthesis (Harmonic smartphone chime)
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
